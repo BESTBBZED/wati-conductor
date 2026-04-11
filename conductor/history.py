@@ -12,7 +12,7 @@ _CURRENT_SESSION_FILE = _HISTORY_DIR / "current_session.json"
 def load_conversation_history() -> list[dict]:
     """Load conversation history from current session."""
     if _CURRENT_SESSION_FILE.exists():
-        with open(_CURRENT_SESSION_FILE, "r") as f:
+        with open(_CURRENT_SESSION_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
@@ -31,8 +31,8 @@ def save_conversation_turn(instruction: str, response: str):
     
     history.append(turn)
     
-    with open(_CURRENT_SESSION_FILE, "w") as f:
-        json.dump(history, f, indent=2)
+    with open(_CURRENT_SESSION_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
 
 
 def clear_conversation_history():

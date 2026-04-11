@@ -102,11 +102,15 @@ async def interactive_loop():
     # Create agent once
     agent = create_agent_graph()
     trust_mode = False
+    interrupt_count = 0
     
     while True:
         try:
             # Get user input
             user_input = Prompt.ask("\n[bold green]You[/bold green]")
+            
+            # Reset interrupt counter on successful input
+            interrupt_count = 0
             
             if not user_input.strip():
                 continue
@@ -126,8 +130,13 @@ async def interactive_loop():
             success, response = await run_instruction(user_input, agent, trust_mode)
             
         except KeyboardInterrupt:
-            console.print("\n\n[yellow]Interrupted. Type 'quit' to exit or continue with another request.[/yellow]\n")
-            continue
+            interrupt_count += 1
+            if interrupt_count == 1:
+                console.print("\n\n[yellow]Interrupted. Press Ctrl+C again to exit or continue with another request.[/yellow]\n")
+                continue
+            else:
+                console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
+                break
         except EOFError:
             console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
             break

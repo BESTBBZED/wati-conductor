@@ -18,8 +18,13 @@ IMPORTANT:
 - Break down complex instructions into multiple tasks
 - Each task should have confidence >= 0.7 to be executed
 - Tasks can reference previous task results using "$task_N.field" (e.g., "$task_0.contacts")
-- For unclear requests, return empty tasks list with overall_confidence < 0.3
+- DO NOT use array indexing like "$task_0.contacts[0]" - use batch tools instead
+- DO NOT use JSONPath filters like "$task_0.contacts[?(...)]" - instead, describe the filtering in the task description and let the tool handle it
+- For batch operations on filtered results, pass the full list and describe the filter condition in a separate parameter
 - search_contacts already returns full contact details — do NOT add get_contact_info after it
+- For unclear requests, return empty tasks list with overall_confidence < 0.3
+- For update_contact_attributes_batch and add_contact_tag_batch, filter_condition must be a STRING like "tier != premium" or "tier == basic", NOT a dict
+- Use batch tools (update_contact_attributes_batch, add_contact_tag_batch) when operating on multiple contacts
 
 Available tools:
 {tools}
@@ -42,8 +47,11 @@ Examples:
 User: "Find all VIP contacts and send them the welcome_wati template"
 {{"tasks": [{{"tool": "search_contacts", "params": {{"tag": "VIP"}}, "description": "Find VIP contacts", "confidence": 0.95}}, {{"tool": "send_template_message_batch", "params": {{"contacts": "$task_0.contacts", "template_name": "welcome_wati"}}, "description": "Send welcome_wati to VIP contacts", "confidence": 0.90}}], "overall_confidence": 0.92}}
 
-User: "Search VIP contacts, create a ticket to Sam about payment, and list templates"
-{{"tasks": [{{"tool": "search_contacts", "params": {{"tag": "VIP"}}, "description": "Find VIP contacts", "confidence": 0.95}}, {{"tool": "create_ticket", "params": {{"subject": "payment issue", "assignee": "Sam", "priority": "high"}}, "description": "Create ticket for Sam about payment", "confidence": 0.90}}, {{"tool": "list_templates", "params": {{}}, "description": "List all templates", "confidence": 0.95}}], "overall_confidence": 0.93}}
+User: "Find Beijing contacts, upgrade non-premium ones to premium, and tag them all as VIP"
+{{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Beijing"}}, "description": "Find Beijing contacts", "confidence": 0.95}}, {{"tool": "update_contact_attributes_batch", "params": {{"contacts": "$task_0.contacts", "attributes": {{"tier": "premium"}}, "filter_condition": "tier != premium"}}, "description": "Upgrade non-premium Beijing contacts", "confidence": 0.90}}, {{"tool": "add_contact_tag_batch", "params": {{"contacts": "$task_0.contacts", "tag": "VIP"}}, "description": "Tag all Beijing contacts as VIP", "confidence": 0.90}}], "overall_confidence": 0.92}}
+
+User: "Remove 'regular' tag from Beijing VIP customers"
+{{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Beijing"}}, "description": "Find Beijing contacts", "confidence": 0.95}}, {{"tool": "remove_contact_tag_batch", "params": {{"contacts": "$task_0.contacts", "tag": "regular"}}, "description": "Remove regular tag from Beijing contacts", "confidence": 0.90}}], "overall_confidence": 0.92}}
 
 User: "What templates do I have?"
 {{"tasks": [{{"tool": "list_templates", "params": {{}}, "description": "List all available templates", "confidence": 0.95}}], "overall_confidence": 0.95}}
@@ -79,11 +87,24 @@ def extract_json(text: str) -> dict[str, Any]:
 
 async def parse_intent(instruction: str) -> Intent:
     """Parse natural language instruction into multi-task intent."""
+    from conductor.history import get_recent_context
+    
     llm = get_llm(temperature=0.0)
+    
+    # Include recent conversation context with clear instruction
+    context = get_recent_context(max_turns=2)
+    if context:
+        user_message = f"""Previous conversation (for context only, tasks already completed):
+{context}
+
+Current user request (ONLY parse this into tasks):
+User: {instruction}"""
+    else:
+        user_message = f"User: {instruction}"
 
     messages = [
         SystemMessage(content=_build_system_prompt()),
-        HumanMessage(content=f"User: {instruction}")
+        HumanMessage(content=user_message)
     ]
 
     response = await llm.ainvoke(messages)

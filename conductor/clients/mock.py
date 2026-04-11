@@ -2,13 +2,18 @@
 
 import asyncio
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from conductor.models.wati import Contact, Template, Ticket
 
 
-# Persistent storage paths
-_MOCK_DATA_DIR = Path("/app/mock_data")
+# Persistent storage paths - use project root's mock_data if /app doesn't exist
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+_MOCK_DATA_DIR = Path(os.getenv("MOCK_DATA_DIR", "/app/mock_data"))
+if not _MOCK_DATA_DIR.exists() and not _MOCK_DATA_DIR.parent.exists():
+    _MOCK_DATA_DIR = _PROJECT_ROOT / "mock_data"
+
 _CONTACTS_FILE = _MOCK_DATA_DIR / "contacts.json"
 _TEMPLATES_FILE = _MOCK_DATA_DIR / "templates.json"
 _TICKETS_FILE = _MOCK_DATA_DIR / "tickets.json"

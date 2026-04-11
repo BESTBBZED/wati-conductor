@@ -4,7 +4,10 @@ from conductor.tools.contacts import (
     search_contacts,
     get_contact_info,
     add_contact_tag,
+    add_contact_tag_batch,
+    remove_contact_tag_batch,
     update_contact_attributes,
+    update_contact_attributes_batch,
 )
 from conductor.tools.messages import (
     send_session_message,
@@ -31,7 +34,10 @@ def get_all_tools() -> list:
         search_contacts,
         get_contact_info,
         add_contact_tag,
+        add_contact_tag_batch,
+        remove_contact_tag_batch,
         update_contact_attributes,
+        update_contact_attributes_batch,
         # Message tools
         send_session_message,
         send_template_message_batch,
