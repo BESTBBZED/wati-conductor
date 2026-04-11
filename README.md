@@ -1,5 +1,6 @@
 # WATI Conductor
 
+> WATI WhatsApp Automation Agent - used for Candidate Assignment only
 > AI agent that translates natural language into WATI WhatsApp API workflows using LangGraph ReAct pattern
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
