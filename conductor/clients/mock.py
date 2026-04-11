@@ -349,7 +349,7 @@ class MockWATIClient:
         messages_dir = Path("/app/mock_messages")
         if not messages_dir.exists() and not messages_dir.parent.exists():
             messages_dir = _PROJECT_ROOT / "mock_messages"
-        
+
         messages_dir.mkdir(exist_ok=True)
 
         # Create contact-specific directory
