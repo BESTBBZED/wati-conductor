@@ -1,0 +1,44 @@
+"""Configuration management using Pydantic Settings."""
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """Application settings."""
+
+    # WATI API Configuration
+    wati_api_endpoint: str = ""  # e.g., https://live-mt-server.wati.io
+    wati_token: str = ""
+
+    # Mode
+    use_mock: bool = True
+    dry_run_default: bool = False
+
+    # LLM Configuration - Multi-model routing
+    llm_parse_model: str = "deepseek-chat"
+    llm_plan_model: str = "deepseek-chat"
+    llm_clarify_model: str = "deepseek-chat"
+
+    # API Keys
+    deepseek_api_key: str = ""
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+
+    # LLM Settings
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 4096
+
+    # Rate Limiting
+    max_requests_per_second: int = 10
+    max_concurrent_requests: int = 5
+
+    # Logging
+    log_level: str = "INFO"
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"  # Ignore extra fields in .env
+
+
+settings = Settings()

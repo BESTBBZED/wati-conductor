@@ -1,0 +1,31 @@
+services:
+  wati-conductor:
+    build: .
+    image: wati-conductor:v1
+    container_name: wati-conductor
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      # LLM Configuration
+      - LLM_PARSE_MODEL=${LLM_PARSE_MODEL:-deepseek-chat}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # WATI API
+      - USE_MOCK=${USE_MOCK:-true}
+      - WATI_API_ENDPOINT=${WATI_API_ENDPOINT:-}
+      - WATI_TOKEN=${WATI_TOKEN:-}
+
+      # Ticket Management
+      - TICKET_REPORTER=${TICKET_REPORTER:-Zachary}
+
+      # Settings
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - .:/app
+      - ./tests:/app/tests
+      - ./outputs:/app/outputs
+      - ./mock_data:/app/mock_data
+    stdin_open: true
+    tty: true
+    command: tail -f /dev/null  # Keep container running
