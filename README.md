@@ -1,6 +1,7 @@
 # WATI Conductor
 
 > WATI WhatsApp Automation Agent - used for Candidate Assignment only
+
 > AI agent that translates natural language into WATI WhatsApp API workflows using LangGraph ReAct pattern
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,7 +11,38 @@
 
 WATI Conductor is an AI agent that translates natural language instructions into executable WATI WhatsApp API workflows. Built with LangGraph's ReAct (Reasoning + Acting) pattern, it enables non-technical users to automate WhatsApp business operations through conversational commands.
 
-## 🎯 Key Feature: Multi-Task Intent System
+## 🎯 Key Feature: Natural Language Business Automation
+
+**Empowering non-technical users** to leverage LLM capabilities for WhatsApp business operations without writing code or understanding APIs.
+
+### Why This Matters
+
+Traditional API automation requires:
+- Technical knowledge of API endpoints and parameters
+- Programming skills to write integration code
+- Understanding of authentication and error handling
+
+**WATI Conductor removes these barriers:**
+- Business users describe what they want in plain English
+- AI agent translates intent into API workflows
+- Complex multi-step operations become single conversational commands
+
+### Real-World Impact
+
+```bash
+# Traditional approach (requires developer):
+# 1. Write code to search contacts by tag
+# 2. Write code to fetch template details
+# 3. Write code to send batch messages
+# 4. Handle errors and edge cases
+# Total: Hours of development time
+
+# With WATI Conductor (business user):
+You: Find all VIP contacts and send them the welcome_wati template
+# Done in seconds, no code required
+```
+
+## 🎯 Multi-Task Intent System
 
 The agent uses **LLM-powered task decomposition** to break complex instructions into executable tasks with automatic dependency resolution:
 
@@ -98,30 +130,6 @@ All done! I found 10 VIP contacts, created ticket TKT-55618 for Sam about
 payment, and listed 6 available templates.
 ```
 
-### Task Dependency Resolution
-
-Tasks can reference previous task results using `$task_N.field` syntax:
-
-```json
-{
-  "tasks": [
-    {
-      "tool": "search_contacts",
-      "params": {"tag": "VIP"},
-      "confidence": 0.95
-    },
-    {
-      "tool": "send_template_message_batch",
-      "params": {
-        "contacts": "$task_0.contacts",  // References task 0 result
-        "template_name": "welcome_wati"
-      },
-      "confidence": 0.90
-    }
-  ]
-}
-```
-
 ### Trust Mode & Rejection Handling
 
 **Trust Mode** (skip confirmations):
@@ -147,21 +155,6 @@ I understand you've chosen not to send the template. Without this tool, I cannot
 send messages to your VIP contacts. You can manually send messages through the
 WATI dashboard if needed.
 ```
-
-## Features
-
-- 🎯 **Multi-Task Intent**: LLM decomposes complex instructions into executable tasks
-- 🔗 **Dependency Resolution**: Tasks can reference previous task results (`$task_N.field`)
-- 🎚️ **Confidence Filtering**: Only executes tasks with confidence >= 0.7
-- 🛡️ **Interactive Confirmation**: Step-by-step approval before each tool execution
-- 🚀 **Trust Mode**: Skip confirmations for rapid execution
-- 🧠 **ReAct Agent Pattern**: Reasoning (LLM planning) + Acting (tool execution) with LangGraph
-- 💬 **Conversational Context**: Multi-turn conversations with automatic history tracking
-- 🔄 **Interactive Mode**: Persistent chat session, no need to restart for each command
-- 🔁 **Error Recovery**: Auto-retry on failures, stays alive for rephrasing
-- 📊 **Rich CLI**: Professional output with clear separation of thinking vs. response
-- 🔌 **Mock/Real Toggle**: Develop with mock API, deploy with real WATI client
-- 🎫 **Ticket Management**: Create and resolve support tickets with staff assignment
 
 ## Quick Start
 
@@ -243,143 +236,6 @@ Find all VIP contacts
 Find all VIP contacts and send them the welcome_wati template
 Create a ticket to Sam about login issue
 quit
-```
-Invalid input. Please enter 'y' or 'n'. (2 attempts left)
-Proceed? [Y/n]: y       ← Valid input
-✓ Executing...
-
-Proceed? [Y/n]: n       ← Cancel
-❌ Cancelled by user
-```
-
-### 4. Understand the ReAct Flow
-
-The agent follows a **Reasoning → Acting** loop with user confirmation:
-
-```
-User Input: "Send welcome template to new signups"
-    ↓
-[REASONING] Parse Intent
-    → Intent: send_template_to_segment
-    → Confidence: 0.95
-    → Parameters: {tag: "new_signup", template: "welcome"}
-    ↓
-[REASONING] Generate Plan
-    → Step 1: search_contacts(tag="new_signup")
-    → Step 2: get_template_details(name="welcome")
-    → Step 3: send_template_message_batch(contacts, template) 🔥
-    ↓
-[USER CONFIRMATION] ← Interactive prompt
-    Proceed? [Y/n]: y
-    ↓
-[ACTING] Execute Tools
-    → Tool Call: search_contacts → 15 contacts found
-    → Tool Call: get_template_details → template params retrieved
-    → Tool Call: send_template_message_batch → 14 sent, 1 failed
-    ↓
-[RESULT] Final Response
-    → "I found 15 contacts and sent the welcome template. 14 succeeded, 1 failed (invalid phone)"
-```
-
-**Key Components:**
-- **Parser Node**: LLM-powered intent extraction
-## Example Commands
-
-### Multi-Task Workflows (Demo Highlights)
-
-**Single instruction → Multiple tasks:**
-```bash
-You: Find all VIP contacts and send them the welcome_wati template
-
-# Agent decomposes into 2 tasks:
-# Task 1: search_contacts(tag="VIP")
-# Task 2: send_template_message_batch(contacts=$task_0.contacts, template_name="welcome_wati")
-```
-
-**Multiple independent tasks:**
-```bash
-You: Search VIP contacts, create a ticket to Sam about payment, and list templates
-
-# Agent decomposes into 3 independent tasks:
-# Task 1: search_contacts(tag="VIP")
-# Task 2: create_ticket(subject="payment issue", assignee="Sam")
-# Task 3: list_templates()
-```
-
-**Complex workflow with dependencies:**
-```bash
-You: Update 628123450000 to premium and send them welcome template
-
-# Agent decomposes into 3 tasks with dependencies:
-# Task 1: update_contact_attributes(phone="628123450000", attributes={tier: "premium"})
-# Task 2: get_template_details(template_name="welcome_wati")
-# Task 3: send_template_message_batch(contacts=[...], template=$task_1.result)
-```
-
-### Contact Management
-
-**Search contacts:**
-```bash
-You: Find all VIP contacts
-You: Show me contacts from Jakarta
-You: List all premium members
-```
-
-**Get contact details:**
-```bash
-You: What is 628123450000, is he a premium?
-You: Show me details for 6281234567890
-```
-
-**Update contact attributes:**
-```bash
-You: Update contact 6281234567890 tier to premium
-You: Degrade 6281234567890 to normal level
-You: Set 628123450000 city to Jakarta
-```
-
-### Template Operations
-
-**List templates:**
-```bash
-You: What templates do I have?
-You: Show me all available templates
-```
-
-**Send templates:**
-```bash
-You: Send renewal_reminder template to all VIP contacts
-You: Send flash_sale to all Jakarta contacts
-You: Send appointment_reminder to 628123450000
-```
-
-### Ticket Management
-
-**Create tickets:**
-```bash
-You: Create a ticket for 628123450000 about payment issue
-You: Create a ticket to Sam about login issue
-You: Create a ticket for 628123450005 about network error, reporter is customer_service
-```
-
-**Resolve tickets:**
-```bash
-You: Resolve ticket TKT-12345
-You: Close ticket TKT-67890 with resolution "Fixed database connection"
-```
-
-### Conversation Management
-
-**Escalate conversations:**
-```bash
-You: Escalate 6281234567890 to Support
-You: Escalate 628123450000 to premium support team
-```
-
-**Assign operators:**
-```bash
-You: Assign 628123450000 to operator John
-You: Assign conversation 6281234567890 to team Support
 ```
 
 ## Configuration
@@ -786,6 +642,22 @@ poetry run mypy conductor/
 # Lint
 poetry run ruff check conductor/
 ```
+
+## Features
+
+- 🎯 **Natural Language Interface**: Non-technical users can automate WhatsApp operations through conversation
+- 🧠 **Multi-Task Intent**: LLM decomposes complex instructions into executable tasks
+- 🔗 **Dependency Resolution**: Tasks can reference previous task results (`$task_N.field`)
+- 🎚️ **Confidence Filtering**: Only executes tasks with confidence >= 0.7
+- 🛡️ **Interactive Confirmation**: Step-by-step approval before each tool execution
+- 🚀 **Trust Mode**: Skip confirmations for rapid execution
+- 💬 **Conversational Context**: Multi-turn conversations with automatic history tracking
+- 🔄 **Interactive Mode**: Persistent chat session, no need to restart for each command
+- 🔁 **Error Recovery**: Auto-retry on failures, stays alive for rephrasing
+- 📊 **Rich CLI**: Professional output with clear separation of thinking vs. response
+- 🔌 **Mock/Real Toggle**: Develop with mock API, deploy with real WATI client
+- 🎫 **Ticket Management**: Create and resolve support tickets with staff assignment
+
 
 ## Troubleshooting
 

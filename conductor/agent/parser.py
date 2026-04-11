@@ -25,6 +25,9 @@ IMPORTANT:
 - For unclear requests, return empty tasks list with overall_confidence < 0.3
 - For update_contact_attributes_batch and add_contact_tag_batch, filter_condition must be a STRING like "tier != premium" or "tier == basic", NOT a dict
 - Use batch tools (update_contact_attributes_batch, add_contact_tag_batch) when operating on multiple contacts
+- CRITICAL: If user says "let me know", "tell me", "show me", "how many", "who are", they want INFORMATION ONLY - do NOT create update/modify tasks
+- Only create update/modify tasks when user explicitly says "upgrade", "change", "update", "add tag", "remove tag", "send message", etc.
+- TEMPORAL LOGIC: When a task modifies data (e.g., upgrade tier) and a later task needs to filter on the ORIGINAL value (e.g., "tag those who WERE regular"), both tasks should use the SAME source ($task_0.contacts) with filters based on the original data
 
 Available tools:
 {tools}
@@ -47,11 +50,20 @@ Examples:
 User: "Find all VIP contacts and send them the welcome_wati template"
 {{"tasks": [{{"tool": "search_contacts", "params": {{"tag": "VIP"}}, "description": "Find VIP contacts", "confidence": 0.95}}, {{"tool": "send_template_message_batch", "params": {{"contacts": "$task_0.contacts", "template_name": "welcome_wati"}}, "description": "Send welcome_wati to VIP contacts", "confidence": 0.90}}], "overall_confidence": 0.92}}
 
+User: "How many customers are from Tokyo and if they are not premium, let me know"
+{{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Tokyo"}}, "description": "Find Tokyo customers", "confidence": 0.95}}], "overall_confidence": 0.95}}
+
 User: "Find Beijing contacts, upgrade non-premium ones to premium, and tag them all as VIP"
 {{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Beijing"}}, "description": "Find Beijing contacts", "confidence": 0.95}}, {{"tool": "update_contact_attributes_batch", "params": {{"contacts": "$task_0.contacts", "attributes": {{"tier": "premium"}}, "filter_condition": "tier != premium"}}, "description": "Upgrade non-premium Beijing contacts", "confidence": 0.90}}, {{"tool": "add_contact_tag_batch", "params": {{"contacts": "$task_0.contacts", "tag": "VIP"}}, "description": "Tag all Beijing contacts as VIP", "confidence": 0.90}}], "overall_confidence": 0.92}}
 
+User: "Upgrade Beijing non-premium to premium and tag those who were regular as VIP"
+{{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Beijing"}}, "description": "Find Beijing contacts", "confidence": 0.95}}, {{"tool": "update_contact_attributes_batch", "params": {{"contacts": "$task_0.contacts", "attributes": {{"tier": "premium"}}, "filter_condition": "tier != premium"}}, "description": "Upgrade non-premium Beijing contacts", "confidence": 0.90}}, {{"tool": "add_contact_tag_batch", "params": {{"contacts": "$task_0.contacts", "tag": "VIP", "filter_condition": "tier == regular"}}, "description": "Tag those who were originally regular tier", "confidence": 0.90}}], "overall_confidence": 0.92}}
+
 User: "Remove 'regular' tag from Beijing VIP customers"
 {{"tasks": [{{"tool": "search_contacts", "params": {{"attribute_name": "city", "attribute_value": "Beijing"}}, "description": "Find Beijing contacts", "confidence": 0.95}}, {{"tool": "remove_contact_tag_batch", "params": {{"contacts": "$task_0.contacts", "tag": "regular"}}, "description": "Remove regular tag from Beijing contacts", "confidence": 0.90}}], "overall_confidence": 0.92}}
+
+User: "Remove 'regular' tag from 628123450041"
+{{"tasks": [{{"tool": "remove_contact_tag", "params": {{"whatsapp_number": "628123450041", "tag": "regular"}}, "description": "Remove regular tag from contact", "confidence": 0.95}}], "overall_confidence": 0.95}}
 
 User: "What templates do I have?"
 {{"tasks": [{{"tool": "list_templates", "params": {{}}, "description": "List all available templates", "confidence": 0.95}}], "overall_confidence": 0.95}}

@@ -95,6 +95,28 @@ async def add_contact_tag(whatsapp_number: str, tag: str) -> dict:
 
 
 @tool
+async def remove_contact_tag(whatsapp_number: str, tag: str) -> dict:
+    """Remove a tag from a contact.
+
+    Args:
+        whatsapp_number: Contact's WhatsApp number (e.g., "6281234567890").
+        tag: Tag to remove (e.g., "regular", "old_customer").
+
+    Returns:
+        Dictionary containing:
+            - result: Boolean indicating success
+            - message: Success message
+            - error: Error message if failed
+
+    Examples:
+        >>> await remove_contact_tag("6281234567890", "regular")
+        {"result": True, "message": "Tag 'regular' removed successfully"}
+    """
+    client = get_wati_client()
+    return await client.remove_tag(whatsapp_number, tag)
+
+
+@tool
 async def add_contact_tag_batch(
     contacts: list[dict],
     tag: str,
