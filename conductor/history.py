@@ -43,6 +43,8 @@ def clear_conversation_history():
 
 def get_recent_context(max_turns: int = 3) -> str:
     """Get recent conversation context as a formatted string."""
+    import re
+    
     history = load_conversation_history()
     
     if not history:
@@ -50,9 +52,16 @@ def get_recent_context(max_turns: int = 3) -> str:
     
     recent = history[-max_turns:]
     
+    # Remove emoji to avoid JSON serialization issues with Anthropic API
+    def remove_emoji(text: str) -> str:
+        # Remove emoji and other problematic Unicode characters
+        return re.sub(r'[^\x00-\x7F]+', '', text)
+    
     lines = ["Recent conversation:"]
     for turn in recent:
-        lines.append(f"Human: {turn['human']}")
-        lines.append(f"AI: {turn['ai']}")
+        human_text = remove_emoji(turn['human'])
+        ai_text = remove_emoji(turn['ai'])
+        lines.append(f"Human: {human_text}")
+        lines.append(f"AI: {ai_text}")
     
     return "\n".join(lines)

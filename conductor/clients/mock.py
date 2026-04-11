@@ -345,8 +345,11 @@ class MockWATIClient:
 
     def _create_message_record(self, contact: Contact, template: Template, parameters: list[dict]) -> str:
         """Create a local file to simulate message delivery. Returns file path."""
-        # Create messages directory in /app
+        # Create messages directory - use project root if /app doesn't exist
         messages_dir = Path("/app/mock_messages")
+        if not messages_dir.exists() and not messages_dir.parent.exists():
+            messages_dir = _PROJECT_ROOT / "mock_messages"
+        
         messages_dir.mkdir(exist_ok=True)
 
         # Create contact-specific directory
