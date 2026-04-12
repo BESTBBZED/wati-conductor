@@ -1,4 +1,4 @@
-"""Operator and team assignment tools."""
+"""Operator and team conversation-routing tools."""
 
 from langchain.tools import tool
 from conductor.clients.factory import get_wati_client

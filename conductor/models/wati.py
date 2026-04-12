@@ -1,4 +1,4 @@
-"""WATI API data models."""
+"""WATI API data models — Pydantic schemas for contacts, templates, messages, and tickets."""
 
 from pydantic import BaseModel, Field
 

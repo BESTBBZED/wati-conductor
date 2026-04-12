@@ -1,10 +1,10 @@
-"""Plan and execution models."""
+"""Execution plan and API call models."""
 
 from pydantic import BaseModel, Field
 
 
 class APICall(BaseModel):
-    """Single API call in an execution plan."""
+    """A single step in an execution plan (one tool invocation)."""
 
     tool: str = Field(description="Tool/function name to call")
     params: dict = Field(default_factory=dict, description="Parameters for the tool")
@@ -26,7 +26,7 @@ class APICall(BaseModel):
 
 
 class ExecutionPlan(BaseModel):
-    """Complete execution plan for an instruction."""
+    """Ordered sequence of API calls with metadata for user confirmation."""
 
     steps: list[APICall] = Field(description="Sequence of API calls")
     explanation: str = Field(description="Plain language explanation of the plan")

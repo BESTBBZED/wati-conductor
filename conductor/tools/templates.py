@@ -1,4 +1,4 @@
-"""Template management tools."""
+"""Template listing and inspection tools."""
 
 from langchain.tools import tool
 from conductor.clients.factory import get_wati_client

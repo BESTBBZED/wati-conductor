@@ -1,10 +1,10 @@
-"""Clarify node - handle clarification requests."""
+"""Clarify node - formats clarification questions when the agent needs more info."""
 
 from conductor.models.state import AgentState
 
 
 async def clarify_node(state: AgentState) -> dict:
-    """Handle clarification - just format the questions."""
+    """Return a formatted list of clarification questions to the user."""
     questions = state.get("clarification_questions", [])
     
     final_response = "⚠️  Need clarification:\n" + "\n".join(f"  • {q}" for q in questions)

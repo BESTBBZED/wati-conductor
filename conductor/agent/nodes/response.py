@@ -1,4 +1,4 @@
-"""Response node - generate natural language response from execution results."""
+"""Response node - uses LLM to turn raw execution results into a conversational reply."""
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from conductor.models.state import AgentState
@@ -35,66 +35,76 @@ Response: "Done! I sent the renewal reminder template to all 10 VIP contacts suc
 """
 
 
-async def response_node(state: AgentState) -> dict:
-    """Generate natural language response from execution results."""
+async def response_node(
+    state: AgentState, reject_response_temp: float = 0.7, response_temp: float = 0.7
+) -> dict:
+    """Generate a human-friendly response from execution results.
+
+    Handles three cases: user rejected a tool, execution errors occurred,
+    or everything succeeded and results need to be summarised.
+    """
     instruction = state.get("instruction", "")
     results = state.get("execution_results", [])
     errors = state.get("execution_errors", [])
     user_rejected = state.get("user_rejected", False)
     rejected_tool = state.get("rejected_tool", "")
-    
+
     # If user rejected tool execution
     if user_rejected:
-        llm = get_llm(temperature=0.7)
+        llm = get_llm(temperature=reject_response_temp)
         messages = [
-            SystemMessage(content="""You are a helpful assistant explaining why a task cannot be completed.
+            SystemMessage(
+                content="""You are a helpful assistant explaining why a task cannot be completed.
 The user rejected the use of a tool, so you cannot complete their request.
 Generate a polite, understanding response that:
 1. Acknowledges their decision
 2. Explains what information you cannot access without the tool
 3. Suggests alternative ways they could get the information (if applicable)
 
-Be empathetic and helpful."""),
-            HumanMessage(content=f"""User instruction: {instruction}
+Be empathetic and helpful."""
+            ),
+            HumanMessage(
+                content=f"""User instruction: {instruction}
 Rejected tool: {rejected_tool}
 
-Generate a response explaining why you cannot complete the task:""")
+Generate a response explaining why you cannot complete the task:"""
+            ),
         ]
         response = await llm.ainvoke(messages)
         return {"final_response": response.content.strip()}
-    
+
     # If there were errors, return error message
     if errors:
         error_msg = errors[0]
         return {
             "final_response": f"❌ Execution failed at step {error_msg['step']+1} ({error_msg['tool']}): {error_msg['error']}"
         }
-    
+
     # Format results for LLM
     results_summary = _format_results_for_llm(results)
-    
+
     # Generate response with LLM
-    llm = get_llm(temperature=0.7)
-    
+    llm = get_llm(temperature=response_temp)
+
     messages = [
         SystemMessage(content=RESPONSE_PROMPT),
-        HumanMessage(content=f"""User instruction: {instruction}
+        HumanMessage(
+            content=f"""User instruction: {instruction}
 
 Execution results:
 {results_summary}
 
-Generate a natural response:""")
+Generate a natural response:"""
+        ),
     ]
-    
+
     response = await llm.ainvoke(messages)
-    
-    return {
-        "final_response": response.content.strip()
-    }
+
+    return {"final_response": response.content.strip()}
 
 
 def _format_results_for_llm(results: list) -> str:
-    """Format execution results into readable text for LLM."""
+    """Flatten execution results into a text block the LLM can read."""
     lines = []
     for r in results:
         tool = r["tool"]

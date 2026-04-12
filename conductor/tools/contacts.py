@@ -1,4 +1,4 @@
-"""Contact management tools."""
+"""Contact management tools — search, tag, and update WhatsApp contacts."""
 
 from langchain.tools import tool
 from conductor.clients.factory import get_wati_client

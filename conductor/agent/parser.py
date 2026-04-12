@@ -1,4 +1,4 @@
-"""Intent parsing using LLM with structured output."""
+"""Intent parsing — sends user text to an LLM and returns structured tasks."""
 
 import json
 import re
@@ -75,12 +75,12 @@ Respond ONLY with valid JSON. No markdown, no explanation."""
 
 
 def _build_system_prompt() -> str:
-    """Build system prompt with auto-generated tools description."""
+    """Build the system prompt by injecting the current tool signatures."""
     return SYSTEM_PROMPT.format(tools=get_tools_prompt())
 
 
 def extract_json(text: str) -> dict[str, Any]:
-    """Extract JSON from LLM response, handling markdown code blocks."""
+    """Extract a JSON object from LLM output, stripping markdown fences if present."""
     json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if json_match:
         text = json_match.group(1)
@@ -98,7 +98,11 @@ def extract_json(text: str) -> dict[str, Any]:
 
 
 async def parse_intent(instruction: str) -> Intent:
-    """Parse natural language instruction into multi-task intent."""
+    """Parse a natural language instruction into a multi-task Intent.
+
+    Includes recent conversation history for context and filters out
+    low-confidence tasks (< 0.7).
+    """
     from conductor.history import get_recent_context
     
     llm = get_llm(temperature=0.0)

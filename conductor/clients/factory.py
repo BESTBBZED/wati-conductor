@@ -1,4 +1,4 @@
-"""Client factory for getting WATI client."""
+"""Factory for selecting the real or mock WATI client based on config."""
 
 from conductor.clients.mock import MockWATIClient
 from conductor.clients.real import RealWATIClient
@@ -6,7 +6,7 @@ from conductor.config import settings
 
 
 def get_wati_client():
-    """Get WATI client based on configuration."""
+    """Return a ``MockWATIClient`` or ``RealWATIClient`` depending on ``settings.use_mock``."""
     if settings.use_mock:
         return MockWATIClient()
     else:

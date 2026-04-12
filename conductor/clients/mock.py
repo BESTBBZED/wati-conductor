@@ -1,4 +1,4 @@
-"""Mock WATI client with realistic data."""
+"""Mock WATI client — persists data to local JSON files for development and testing."""
 
 import asyncio
 import json
@@ -186,10 +186,18 @@ def _generate_templates() -> list[Template]:
 
 
 class MockWATIClient:
-    """Mock WATI API client for development and testing."""
+    """In-memory WATI client backed by JSON files on disk.
+
+    Simulates network latency and persists contacts, templates, and
+    tickets so state survives across runs.
+    """
 
     def __init__(self, delay_ms: int = 100):
-        """Initialize mock client with simulated latency."""
+        """Initialize mock client.
+
+        Args:
+            delay_ms: Simulated network latency in milliseconds.
+        """
         self.delay_ms = delay_ms
         self.contacts = _load_contacts()
         self.templates = _load_templates()
@@ -344,7 +352,11 @@ class MockWATIClient:
         }
 
     def _create_message_record(self, contact: Contact, template: Template, parameters: list[dict]) -> str:
-        """Create a local file to simulate message delivery. Returns file path."""
+        """Write a text file simulating a delivered WhatsApp message.
+
+        Returns:
+            Path to the created message file.
+        """
         # Create messages directory - use project root if /app doesn't exist
         messages_dir = Path("/app/mock_messages")
         if not messages_dir.exists() and not messages_dir.parent.exists():

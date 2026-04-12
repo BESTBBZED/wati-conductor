@@ -1,4 +1,4 @@
-"""Ticket management tools."""
+"""Ticket creation and resolution tools (local storage, not WATI API)."""
 
 import asyncio
 import os

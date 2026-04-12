@@ -1,10 +1,10 @@
-"""Configuration management using Pydantic Settings."""
+"""Configuration management — loads settings from environment and ``.env`` file."""
 
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings."""
+    """All runtime settings, populated from env vars or ``.env``."""
 
     # WATI API Configuration
     wati_api_endpoint: str = ""  # e.g., https://live-mt-server.wati.io

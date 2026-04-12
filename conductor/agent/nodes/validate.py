@@ -1,10 +1,14 @@
-"""Validate node - check plan before execution."""
+"""Validate node - sanity-checks the execution plan before running it."""
 
 from conductor.models.state import AgentState
 
 
 async def validate_node(state: AgentState) -> dict:
-    """Validate plan before execution."""
+    """Check that the plan is safe to execute.
+
+    Verifies the plan exists, has steps, and that destructive steps
+    include parameters. Returns validation errors or an empty list.
+    """
     errors = []
     plan = state.get("plan")
     

@@ -1,10 +1,10 @@
-"""Base WATI client interface."""
+"""Abstract WATI client protocol — defines the interface all clients must implement."""
 
 from typing import Protocol
 
 
 class WATIClient(Protocol):
-    """Abstract interface for WATI API client."""
+    """Protocol that both ``RealWATIClient`` and ``MockWATIClient`` satisfy."""
 
     async def get_contacts(
         self, tag: str | None = None, page_size: int = 20, page_number: int = 1

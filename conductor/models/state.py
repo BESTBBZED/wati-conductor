@@ -1,4 +1,4 @@
-"""LangGraph agent state."""
+"""LangGraph agent state definition."""
 
 from typing import TypedDict, Literal
 from conductor.models.intent import Intent
@@ -6,7 +6,11 @@ from conductor.models.plan import ExecutionPlan
 
 
 class AgentState(TypedDict, total=False):
-    """State for the LangGraph agent."""
+    """Shared state passed between LangGraph nodes.
+
+    All fields are optional (``total=False``) so each node only needs
+    to return the keys it modifies.
+    """
 
     # Input
     instruction: str

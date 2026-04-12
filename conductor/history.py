@@ -1,4 +1,4 @@
-"""Conversation history manager."""
+"""Conversation history — persists user/AI turns to a JSON session file."""
 
 import json
 from datetime import datetime
@@ -10,7 +10,7 @@ _CURRENT_SESSION_FILE = _HISTORY_DIR / "current_session.json"
 
 
 def load_conversation_history() -> list[dict]:
-    """Load conversation history from current session."""
+    """Load all turns from the current session file."""
     if _CURRENT_SESSION_FILE.exists():
         with open(_CURRENT_SESSION_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -18,7 +18,7 @@ def load_conversation_history() -> list[dict]:
 
 
 def save_conversation_turn(instruction: str, response: str):
-    """Save a conversation turn (user instruction + AI response)."""
+    """Append a user instruction + AI response pair to the session file."""
     _HISTORY_DIR.mkdir(exist_ok=True)
     
     history = load_conversation_history()
@@ -42,7 +42,10 @@ def clear_conversation_history():
 
 
 def get_recent_context(max_turns: int = 3) -> str:
-    """Get recent conversation context as a formatted string."""
+    """Return the last few conversation turns as a plain-text string.
+
+    Strips non-ASCII characters to avoid serialization issues with some LLM APIs.
+    """
     import re
     
     history = load_conversation_history()
@@ -54,7 +57,7 @@ def get_recent_context(max_turns: int = 3) -> str:
     
     # Remove emoji to avoid JSON serialization issues with Anthropic API
     def remove_emoji(text: str) -> str:
-        # Remove emoji and other problematic Unicode characters
+        """Strip non-ASCII characters (emoji, etc.) from text."""
         return re.sub(r'[^\x00-\x7F]+', '', text)
     
     lines = ["Recent conversation:"]

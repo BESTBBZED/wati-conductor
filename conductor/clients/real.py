@@ -1,4 +1,4 @@
-"""Real WATI API client implementation."""
+"""Real WATI API client — talks to the live WATI HTTP endpoints."""
 
 import httpx
 from datetime import datetime
@@ -6,7 +6,7 @@ from conductor.models.wati import Ticket
 
 
 class RealWATIClient:
-    """Real WATI API client."""
+    """HTTP client for the WATI v3 REST API."""
 
     def __init__(self, api_endpoint: str, token: str):
         """Initialize WATI client.

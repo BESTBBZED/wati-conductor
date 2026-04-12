@@ -1,4 +1,4 @@
-"""Staff/employee data for ticket assignment."""
+"""Staff roster used for default ticket assignment."""
 
 import random
 
@@ -15,5 +15,5 @@ STAFF_MEMBERS = [
 
 
 def get_random_staff() -> str:
-    """Get a random staff member name."""
+    """Pick a random staff member for ticket assignment."""
     return random.choice(STAFF_MEMBERS)

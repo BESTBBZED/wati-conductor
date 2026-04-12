@@ -1,11 +1,11 @@
-"""Intent and entity models."""
+"""Intent and entity models for natural language understanding."""
 
 from typing import Literal
 from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel):
-    """Extracted entity from user instruction."""
+    """A named entity extracted from user text (e.g. a contact name, tag, or phone number)."""
 
     type: str = Field(description="Entity type (contact, tag, template, etc.)")
     value: str = Field(description="Entity value")
@@ -13,7 +13,7 @@ class Entity(BaseModel):
 
 
 class Task(BaseModel):
-    """A single task with tool and parameters."""
+    """One tool invocation with its parameters, as planned by the LLM."""
     
     tool: str = Field(description="Tool name to execute")
     params: dict = Field(default_factory=dict, description="Tool parameters")
@@ -22,7 +22,7 @@ class Task(BaseModel):
 
 
 class Intent(BaseModel):
-    """Multi-task intent parsed from natural language."""
+    """Structured representation of a user instruction as a list of tasks."""
 
     tasks: list[Task] = Field(description="List of tasks to execute")
     overall_confidence: float = Field(ge=0.0, le=1.0, description="Overall parse confidence")

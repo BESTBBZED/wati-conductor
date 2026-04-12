@@ -1,4 +1,4 @@
-"""Message sending tools."""
+"""Message sending tools for session and template messages."""
 
 import json
 from datetime import datetime
@@ -97,7 +97,7 @@ async def send_template_message_batch(
 
 
 def _save_demo_result(template_name: str, result: dict, template: dict | None, recipients: list[dict]):
-    """Save send template result to outputs directory for demo purposes."""
+    """Persist a JSON record of the send operation for demo/debugging purposes."""
     outputs_dir = Path("/app/outputs")
     if not outputs_dir.exists() and not outputs_dir.parent.exists():
         outputs_dir = Path.cwd() / "outputs"

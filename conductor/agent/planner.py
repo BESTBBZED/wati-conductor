@@ -1,4 +1,8 @@
-"""Plan generation - translate intent into executable API call sequence."""
+"""Plan generation — translates a parsed Intent into an ordered ExecutionPlan.
+
+This is the legacy planner used for single-action intents. The newer
+multi-task parser (``parser.py``) handles most cases directly.
+"""
 
 from conductor.models.intent import Intent
 from conductor.models.plan import APICall, ExecutionPlan

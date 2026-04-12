@@ -1,11 +1,15 @@
-"""Execute node - run the plan steps."""
+"""Execute node - runs parsed tasks against WATI tools with optional user confirmation."""
 
 from conductor.models.state import AgentState
 from conductor.tools.registry import get_tool
 
 
 async def execute_node(state: AgentState) -> dict:
-    """Execute the tasks from intent."""
+    """Execute each task from the parsed intent sequentially.
+
+    Resolves inter-task references (e.g. ``$task_0.contacts``), prompts
+    for user confirmation unless trust mode is on, and stops on first error.
+    """
     results = []
     errors = []
     intent = state["intent"]
@@ -65,7 +69,15 @@ async def execute_node(state: AgentState) -> dict:
 
 
 def _resolve_params(params: dict, prior_results: list) -> dict:
-    """Resolve $task_N references in parameters."""
+    """Replace ``$task_N.field`` references with actual values from earlier results.
+
+    Args:
+        params: Raw parameter dict that may contain ``$task_N`` references.
+        prior_results: List of prior execution result dicts.
+
+    Returns:
+        New dict with references resolved to concrete values.
+    """
     resolved = {}
     for key, value in params.items():
         if isinstance(value, str) and value.startswith("$task_"):

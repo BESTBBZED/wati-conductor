@@ -1,4 +1,4 @@
-"""CLI interface for WATI Conductor."""
+"""CLI interface for WATI Conductor — interactive REPL and single-command mode."""
 
 import asyncio
 import sys
@@ -14,7 +14,16 @@ console = Console()
 
 
 async def run_instruction(instruction: str, agent, trust: bool = False) -> tuple[bool, str]:
-    """Run a single instruction and return (success, response)."""
+    """Execute one user instruction through the agent graph.
+
+    Args:
+        instruction: Natural language instruction.
+        agent: Compiled LangGraph agent.
+        trust: If True, skip per-tool confirmation prompts.
+
+    Returns:
+        ``(success, response_text)`` tuple.
+    """
     
     state = {
         "instruction": instruction,
@@ -91,7 +100,7 @@ async def run_instruction(instruction: str, agent, trust: bool = False) -> tuple
 
 
 async def interactive_loop():
-    """Run interactive CLI loop."""
+    """Run the interactive REPL — reads instructions in a loop until the user quits."""
     console.print(Panel.fit(
         "[bold cyan]WATI Conductor - Interactive Mode[/bold cyan]\n"
         "Type your instructions naturally. Type 'quit' or 'exit' to stop.\n"
@@ -165,7 +174,7 @@ def run(instruction: str, dry_run: bool, verbose: bool, trust: bool):
 
 
 async def _run_single_command(instruction: str, dry_run: bool, verbose: bool, trust: bool):
-    """Run a single command (legacy mode)."""
+    """Run a single instruction from the command line (non-interactive)."""
     console.print(f"\n[bold cyan]Instruction:[/bold cyan] {instruction}\n")
     
     agent = create_agent_graph()

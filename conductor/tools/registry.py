@@ -1,4 +1,4 @@
-"""Tool registry for LangGraph agent."""
+"""Tool registry — central list of all LangChain tools available to the agent."""
 
 from conductor.tools.contacts import (
     search_contacts,
