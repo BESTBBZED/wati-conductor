@@ -3,7 +3,8 @@
 Defines the three-node graph: parse → execute → respond.
 """
 
-from langgraph.graph import StateGraph, END
+from typing import Literal
+from langgraph.graph import StateGraph, END, CompiledGraph
 from conductor.models.state import AgentState
 from conductor.agent.nodes import (
     parse_node,
@@ -12,7 +13,7 @@ from conductor.agent.nodes import (
 )
 
 
-def route_after_parse(state: AgentState) -> str:
+def route_after_parse(state: AgentState) -> Literal["execute", "generate_response"]:
     """Decide the next node after parsing.
 
     Skips execution when confidence is too low or mode is dry-run.
@@ -30,7 +31,7 @@ def route_after_parse(state: AgentState) -> str:
     return "execute"
 
 
-def create_agent_graph():
+def create_agent_graph() -> CompiledGraph:
     """Create the ReAct agent state machine.
 
     Simplified flow:
