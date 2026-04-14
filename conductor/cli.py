@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from langgraph.graph import CompiledGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from conductor.agent import create_agent_graph
 from conductor.history import save_conversation_turn
@@ -15,7 +15,7 @@ from conductor.history import save_conversation_turn
 console = Console()
 
 
-async def run_instruction(instruction: str, agent: CompiledGraph, trust: bool = False) -> tuple[bool, str]:
+async def run_instruction(instruction: str, agent: CompiledStateGraph, trust: bool = False) -> tuple[bool, str]:
     """Execute one user instruction through the agent graph.
 
     Args:

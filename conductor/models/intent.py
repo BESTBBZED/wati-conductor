@@ -1,7 +1,8 @@
 """Intent and entity models for natural language understanding."""
 
+import re
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Entity(BaseModel):
@@ -19,6 +20,21 @@ class Task(BaseModel):
     params: dict = Field(default_factory=dict, description="Tool parameters")
     description: str = Field(description="Human-readable task description")
     confidence: float = Field(ge=0.0, le=1.0, description="Task confidence")
+    
+    @field_validator('params')
+    @classmethod
+    def validate_task_references(cls, v: dict) -> dict:
+        """Ensure task references use the correct $task_N format.
+        
+        Normalizes common variations like @task_0, {task_0}, task_0 to $task_0.
+        """
+        normalized = {}
+        for key, value in v.items():
+            if isinstance(value, str) and 'task' in value.lower():
+                # Normalize: @task_0, {task_0}, task_0 → $task_0
+                value = re.sub(r'[@{]?\s*task[_\s]*(\d+)\s*[}]?', r'$task_\1', value, flags=re.IGNORECASE)
+            normalized[key] = value
+        return normalized
 
 
 class Intent(BaseModel):

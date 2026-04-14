@@ -6,6 +6,7 @@ from typing import Any
 
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from conductor.history import get_recent_context
 from conductor.models.intent import Intent
 from conductor.agent.llm_factory import get_llm
 from conductor.tools.registry import get_tools_prompt
@@ -14,7 +15,7 @@ from conductor.tools.registry import get_tools_prompt
 SYSTEM_PROMPT = """You are an API orchestration planner for WATI WhatsApp API.
 Parse user instructions into a list of tasks with tools and parameters.
 
-IMPORTANT: 
+IMPORTANT:
 - Break down complex instructions into multiple tasks
 - Each task should have confidence >= 0.7 to be executed
 - Tasks can reference previous task results using "$task_N.field" (e.g., "$task_0.contacts")
@@ -102,11 +103,12 @@ async def parse_intent(instruction: str) -> Intent:
 
     Includes recent conversation history for context and filters out
     low-confidence tasks (< 0.7).
+    
+    Uses structured output to guarantee the LLM returns valid Intent schema.
     """
-    from conductor.history import get_recent_context
-    
-    llm = get_llm(temperature=0.0)
-    
+    # Get LLM with structured output - forces Pydantic validation
+    llm = get_llm(temperature=0.0).with_structured_output(Intent)
+
     # Include recent conversation context with clear instruction
     context = get_recent_context(max_turns=2)
     if context:
@@ -123,12 +125,9 @@ User: {instruction}"""
         HumanMessage(content=user_message)
     ]
 
-    response = await llm.ainvoke(messages)
-
-    try:
-        data = extract_json(response.content)
-        intent = Intent(**data)
-        intent.tasks = [t for t in intent.tasks if t.confidence >= 0.7]
-        return intent
-    except Exception as e:
-        raise ValueError(f"Failed to parse intent: {e}\nLLM response: {response.content}")
+    # LLM returns Intent directly, validated by Pydantic
+    intent = await llm.ainvoke(messages)
+    
+    # Filter low-confidence tasks
+    intent.tasks = [t for t in intent.tasks if t.confidence >= 0.7]
+    return intent

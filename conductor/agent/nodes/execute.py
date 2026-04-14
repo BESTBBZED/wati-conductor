@@ -15,6 +15,7 @@ async def execute_node(state: AgentState) -> dict:
     intent = state["intent"]
     trust_mode = state.get("trust_mode", False)
 
+    # The intent is constrained by a pydantic validation model
     for i, task in enumerate(intent.tasks):
         try:
             # Get the tool
