@@ -1,0 +1,12 @@
+services:
+  wati-conductor-docs:
+    build:
+      context: .
+    container_name: wati_conductor_docs
+    ports:
+      - "9104:8000"
+    volumes:
+      - ..:/docs
+    command: mkdocs serve -f mkdocs/mkdocs.yml --dev-addr=0.0.0.0:8000
+    tty: true
+    restart: unless-stopped

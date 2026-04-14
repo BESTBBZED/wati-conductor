@@ -1,0 +1,47 @@
+site_name: WATI Conductor Documentation
+site_description: Documentation for the WATI Conductor project
+site_author: QuantZach Team
+
+docs_dir: ../docs
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: FINAL_SUMMARY.md
+  - Architecture: MULTI_TASK_ARCHITECTURE.md
+  - Changelog: CHANGELOG.md
+  - Session Progress: SESSION_PROGRESS.md
+  - Completion Report: COMPLETION_REPORT.md
+  - Docker:
+    - Setup: DOCKER.md
+    - Summary: DOCKER_SUMMARY.md
+  - WATI API Setup: WATI_API_SETUP.md
+  - Demo Scripts: demo_scripts.md
+  - Function Checklist: function_checklist.md
+  - Zachary:
+    - Demo Script: zachary/demo_script.md
+    - Problem Framing: zachary/problem_framing.md
+    - Build Notes: zachary/build_notes.md
