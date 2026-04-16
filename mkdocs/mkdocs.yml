@@ -30,18 +30,16 @@ markdown_extensions:
   - md_in_html
 
 nav:
-  - Home: FINAL_SUMMARY.md
-  - Architecture: MULTI_TASK_ARCHITECTURE.md
-  - Changelog: CHANGELOG.md
-  - Session Progress: SESSION_PROGRESS.md
-  - Completion Report: COMPLETION_REPORT.md
-  - Docker:
-    - Setup: DOCKER.md
-    - Summary: DOCKER_SUMMARY.md
-  - WATI API Setup: WATI_API_SETUP.md
-  - Demo Scripts: demo_scripts.md
-  - Function Checklist: function_checklist.md
-  - Zachary:
-    - Demo Script: zachary/demo_script.md
-    - Problem Framing: zachary/problem_framing.md
-    - Build Notes: zachary/build_notes.md
+  - Home: index.md
+  - Architecture: architecture.md
+  - Components: components.md
+  - Status: status.md
+  - Roadmap: roadmap.md
+  - Setup: setup.md
+  - Dev Notes: dev-notes.md
+  - Specs:
+    - Overview: specs/v1/README.md
+    - Requirements: specs/v1/requirements.md
+    - Design: specs/v1/design.md
+    - Tasks: specs/v1/tasks.md
+    - Summary: specs/v1/SUMMARY.md
