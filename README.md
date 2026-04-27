@@ -1,187 +1,78 @@
 # WATI Conductor
 
-> WATI WhatsApp Automation Agent - used for Candidate Assignment only
-
 > AI agent that translates natural language into WATI WhatsApp API workflows using LangGraph ReAct pattern
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-green.svg)](https://github.com/langchain-ai/langgraph)
 
 ## Overview
 
-WATI Conductor is an AI agent that translates natural language instructions into executable WATI WhatsApp API workflows. Built with LangGraph's ReAct (Reasoning + Acting) pattern, it enables non-technical users to automate WhatsApp business operations through conversational commands.
+WATI Conductor is an AI agent that translates natural language instructions into executable WATI WhatsApp API workflows. Built with LangGraph's **ReAct (Reasoning + Acting)** pattern, the LLM reasons step-by-step — calling one tool at a time, observing the result, and deciding what to do next.
 
-## 🎯 Key Feature: Natural Language Business Automation
+## Why This Matters
 
-**Empowering non-technical users** to leverage LLM capabilities for WhatsApp business operations without writing code or understanding APIs.
-
-### Why This Matters
-
-Traditional API automation requires:
-- Technical knowledge of API endpoints and parameters
-- Programming skills to write integration code
-- Understanding of authentication and error handling
-
-**WATI Conductor removes these barriers:**
-- Business users describe what they want in plain English
-- AI agent translates intent into API workflows
-- Complex multi-step operations become single conversational commands
-
-### Real-World Impact
+Traditional API automation requires technical knowledge of endpoints, parameters, and error handling. WATI Conductor removes these barriers — business users describe what they want in plain English, and the agent handles the rest.
 
 ```bash
-# Traditional approach (requires developer):
-# 1. Write code to search contacts by tag
-# 2. Write code to fetch template details
-# 3. Write code to send batch messages
-# 4. Handle errors and edge cases
-# Total: Hours of development time
-
-# With WATI Conductor (business user):
+# Instead of writing API integration code:
 You: Find all VIP contacts and send them the welcome_wati template
-# Done in seconds, no code required
-```
-
-## 🎯 Multi-Task Intent System
-
-The agent uses **LLM-powered task decomposition** to break complex instructions into executable tasks with automatic dependency resolution:
-
-### Architecture
-
-```python
-# Simplified implementation (Plan-then-Execute pattern, NOT LangChain's AgentExecutor)
-class WATIConductor:
-    def process_input(self, user_input):
-        # 1. LLM generates multi-task plan (single LLM call)
-        intent = llm.parse_intent(user_input)  # Returns: Intent(tasks=[...])
-
-        # 2. Show preview to user
-        self.show_tasks(intent.tasks)
-
-        # 3. Execute tasks sequentially (no LLM calls, just tool invocations)
-        results = []
-        for task in intent.tasks:
-            if task.confidence < 0.7:
-                continue  # Skip low-confidence tasks
-
-            # Inject previous results as parameters
-            params = self.resolve_params(task.params, results)
-
-            # Execute tool
-            result = tool_registry.get(task.tool).invoke(params)
-            results.append({"task": task, "result": result})
-
-        # 4. Generate natural language response (single LLM call)
-        return llm.generate_response(user_input, results)
-```
-
-### Example: Multi-Task Execution
-
-**Single complex instruction → Multiple tasks:**
-
-```bash
-You: Find all VIP contacts and send them the welcome_wati template
-
-🤔 Agent Thinking:
-Tasks: 2 (confidence: 0.92)
-  1. Find VIP contacts (confidence: 0.95)
-  2. Send welcome_wati template to VIP contacts (confidence: 0.90)
-
-🔧 Tool Execution:
-Plan has 2 task(s). Will execute one at a time.
-
-Tool: search_contacts
-Description: Find VIP contacts
-Parameters: {'tag': 'VIP'}
-Execute this tool? [Y/n/q]: Y
-
-Tool: send_template_message_batch
-Description: Send welcome_wati to VIP contacts
-Parameters: {'contacts': '$task_0.contacts', 'template_name': 'welcome_wati'}
-Execute this tool? [Y/n/q]: Y
-
-✓ Completed
-
-💬 Response:
-Perfect! I found 10 VIP contacts and successfully sent the "welcome_wati"
-template to all of them.
-```
-
-**Multiple independent tasks:**
-
-```bash
-You: Search VIP contacts, create a ticket to Sam about payment, and list templates
-
-🤔 Agent Thinking:
-Tasks: 3 (confidence: 0.93)
-  1. Find VIP contacts (confidence: 0.95)
-  2. Create ticket for Sam about payment (confidence: 0.90)
-  3. List all templates (confidence: 0.95)
-
-🔧 Tool Execution:
-Tool: search_contacts
-Tool: create_ticket
-Tool: list_templates
-✓ Auto-approved (trust mode)
-✓ Completed
-
-💬 Response:
-All done! I found 10 VIP contacts, created ticket TKT-55618 for Sam about
-payment, and listed 6 available templates.
-```
-
-### Trust Mode & Rejection Handling
-
-**Trust Mode** (skip confirmations):
-```bash
-You: trust
-Trust mode enabled ✓
-
-You: Find all VIP contacts and send them the welcome_wati template
-Tool: search_contacts
-Tool: send_template_message_batch
-✓ Auto-approved (trust mode)
-✓ Completed
-```
-
-**Rejection Handling** (intelligent fallback):
-```bash
-Tool: send_template_message_batch
-Execute this tool? [Y/n/q]: n
-⚠ Tool execution rejected by user
-
-💬 Response:
-I understand you've chosen not to send the template. Without this tool, I cannot
-send messages to your VIP contacts. You can manually send messages through the
-WATI dashboard if needed.
+# Agent reasons through it step-by-step, adapting to results
 ```
 
 ## Quick Start
 
-### 1. Build Docker Image
-
 ```bash
-# Build with optimized caching (uses Tsinghua mirrors for China)
-docker build -t wati-conductor:v1 .
-```
+# Configure
+cp .env.example .env
+# Edit .env with your LLM API key (see Configuration)
 
-### 2. Start Container
-
-```bash
-# Start with docker-compose
+# Start with Docker
 docker compose up -d
+docker compose exec wati-conductor python3 main.py
 
-# Check status
-docker compose ps
+# Or run locally
+poetry install
+python -m conductor.cli
 ```
 
-### 3. Run Interactive Mode
+## How It Works — ReAct Loop
 
-**Recommended for demos:**
+The agent uses a **think → act → observe** loop. Unlike plan-then-execute approaches, the LLM sees each tool result before deciding the next action:
+
+```
+User: "Find all VIP contacts and send them the welcome_wati template"
+
+  Iteration 1 — Think: I need to find VIP contacts first
+                Act:   search_contacts(tag="VIP")
+                Observe: {contacts: [...], total: 10}
+
+  Iteration 2 — Think: Found 10 contacts, now send the template
+                Act:   send_template_message_batch(contacts=[...], template="welcome_wati")
+                Observe: {sent: 10, failed: 0}
+
+  Iteration 3 — Think: Both steps done, summarize
+                Respond: "Found 10 VIP contacts and sent welcome_wati to all of them."
+```
+
+**Dynamic adaptation** — if a search returns 0 results, the agent tells you instead of blindly proceeding:
+
+```
+User: "Send welcome_wati to all premium contacts"
+
+  Iteration 1 — Act: search_contacts(tag="premium")
+                Observe: {contacts: [], total: 0}
+
+  Iteration 2 — Think: No premium contacts found, inform user
+                Respond: "No premium contacts found. Would you like to search by a different tag?"
+```
+
+## Usage
+
+### Interactive Mode (Recommended)
+
 ```bash
 docker compose exec wati-conductor python3 main.py
 
-# Interactive session:
 ╭──────────────────────────────────────────────────────────────────╮
 │ WATI Conductor - Interactive Mode                                │
 │ Type your instructions naturally. Type 'quit' or 'exit' to stop. │
@@ -192,526 +83,182 @@ You: trust
 Trust mode enabled ✓
 
 You: What templates do I have?
-Tool: list_templates
-✓ Auto-approved (trust mode)
-✓ Completed
-
 💬 Response:
-You have 6 message templates available:
-1. welcome_wati – A friendly welcome message (Marketing)
-2. shopify_default_cod_confirm_order_v5 – Order confirmation (Marketing)
-3. ecom_presales_oct – Pre-sale announcement (Marketing)
-...
+You have 6 message templates available...
+(1 iteration)
 
 You: Find all VIP contacts and send them the welcome_wati template
-Tool: search_contacts
-Tool: get_template_details
-Tool: send_template_message_batch
-✓ Auto-approved (trust mode)
-✓ Completed
-
 💬 Response:
-Done! I sent the welcome_wati template to all 10 VIP contacts successfully.
+Found 10 VIP contacts and sent welcome_wati to all of them.
+(3 iterations)
 
 You: quit
 Goodbye! 👋
 ```
 
-### 4. Demo Commands
+### Single-Shot Mode
 
-**One-line demo (automated):**
 ```bash
-./demo.sh
+python -m conductor.cli "Find all VIP contacts"
+python -m conductor.cli "Send welcome_wati to VIPs" --dry-run
+python -m conductor.cli "Send welcome_wati to VIPs" --trust
+python -m conductor.cli "Escalate 628123450000 to Support" --verbose
 ```
 
-**Quick demo sequence (copy-paste ready):**
-```bash
-# Start interactive mode
-docker compose exec wati-conductor python3 main.py
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show first planned tool call without executing |
+| `--trust` | Auto-approve all tool executions |
+| `--verbose` | Enable debug logging |
 
-# Then paste these commands one by one:
-trust
-What templates do I have?
-Find all VIP contacts
-Find all VIP contacts and send them the welcome_wati template
-Create a ticket to Sam about login issue
-quit
+### Human-in-the-Loop
+
+By default, the agent asks for confirmation before each tool:
+
 ```
+🔧 Tool: send_template_message_batch
+   Args: {'contacts': [...], 'template_name': 'welcome_wati'}
+   Execute? [Y/n/q]: Y
+```
+
+If you reject, the LLM observes the rejection and responds accordingly. Toggle trust mode with `trust` in the REPL or `--trust` flag.
 
 ## Configuration
 
-Create `.env` file (or use environment variables in docker-compose.yaml):
+All settings in `.env`:
 
 ```bash
-# LLM Configuration (for intent parsing & planning)
-LLM_PARSE_MODEL=deepseek-chat          # or claude-3-5-sonnet-20241022
-DEEPSEEK_API_KEY=your-key              # or ANTHROPIC_API_KEY
-OPENAI_API_KEY=your-key                # optional
+# LLM — pick one (DeepSeek v4 Pro recommended for ReAct reasoning)
+LLM_REACT_MODEL=deepseek-v4-pro
+DEEPSEEK_API_KEY=sk-your-key
 
-# WATI API
-USE_MOCK=true                          # Set to false for real WATI API
-WATI_API_ENDPOINT=https://live-server-123.wati.io  # Your WATI server
-WATI_TOKEN=your_api_token              # Your WATI API token
+# Or use Claude / OpenAI
+# LLM_REACT_MODEL=claude-3-5-sonnet-20241022
+# ANTHROPIC_API_KEY=sk-ant-your-key
+# LLM_REACT_MODEL=gpt-4o
+# OPENAI_API_KEY=sk-your-key
 
-# Ticket Management
-TICKET_REPORTER=Zachary                # Default reporter name for tickets
+# ReAct safety limit (default: 10 iterations per instruction)
+MAX_REACT_ITERATIONS=10
 
-# Logging
-LOG_LEVEL=INFO
+# WATI API (mock mode works without credentials)
+USE_MOCK=true
+# USE_MOCK=false
+# WATI_API_ENDPOINT=https://live-server-123.wati.io
+# WATI_TOKEN=your_token
 ```
 
-### Using Real WATI API
+## Available Tools (16)
 
-To connect to your actual WATI account:
-
-1. Set `USE_MOCK=false` in `.env`
-2. Configure `WATI_API_ENDPOINT` and `WATI_TOKEN`
-3. Restart the container: `docker compose down && docker compose up -d`
-
-See [docs/WATI_API_SETUP.md](docs/WATI_API_SETUP.md) for detailed setup instructions.
-
-**Note**: Ticket management is always stored locally (not via WATI API).
-
-## Interactive Mode
-
-The interactive mode provides a persistent chat session where you can have multi-turn conversations without restarting the CLI.
-
-### Starting Interactive Mode
-
-```bash
-# Inside container
-docker compose exec -it wati-conductor python chat.py
-
-# Or add to your shell alias
-alias wati="docker compose -f /path/to/wati-conductor/docker-compose.yaml exec -it wati-conductor python chat.py"
-```
-
-### Interactive Commands
-
-| Command | Description |
-|---------|-------------|
-| `trust` | Toggle auto-approval mode (no confirmation prompts) |
-| `quit` / `exit` / `q` | Exit the interactive session |
-| Ctrl+C | Interrupt current request (session stays alive) |
-
-### Example Session
-
-```bash
-╭──────────────────────────────────────────────────────╮
-│ WATI Conductor - Interactive Mode                    │
-│ Type your instructions naturally.                    │
-│ Type 'quit' to stop. Type 'trust' to auto-approve.  │
-╰──────────────────────────────────────────────────────╯
-
-You: trust
-Trust mode enabled ✓
-
-You: What templates do I have?
-💬 Response:
-You have 5 message templates available:
-- renewal_reminder (MARKETING)
-- flash_sale (MARKETING)
-- vip_exclusive (MARKETING)
-- order_confirmation (UTILITY)
-- appointment_reminder (UTILITY)
-
-You: Create a ticket to Sam about database connection error
-💬 Response:
-I've created ticket TKT-45131 for Sam about the database connection error.
-The ticket is currently open with medium priority.
-
-You: List all VIP contacts
-💬 Response:
-Found 10 VIP contacts from Jakarta, Surabaya, and Bandung...
-
-You: quit
-Goodbye! 👋
-```
-
-### Error Handling
-
-If a request fails, the agent will automatically retry (up to 2 times) and stay alive:
-
-```bash
-You: Some unclear request
-⚠ Error occurred: Failed to parse intent
-Retrying... (attempt 1/2)
-
-❌ Failed after 2 retries
-Something went wrong. Please try rephrasing your request.
-
-You: [You can continue with a new request]
-```
-
-## Usage Examples
-
-### Interactive Mode (Recommended)
-
-The interactive mode provides the best experience with persistent sessions and context:
-
-```bash
-$ docker compose exec -it wati-conductor python chat.py
-
-You: trust
-Trust mode enabled ✓
-
-You: What is 628123450000?
-💬 Response:
-The number 628123450000 belongs to Customer 0. They're a VIP contact from Jakarta,
-and their account is set as premium.
-
-You: I want to degrade him to normal
-💬 Response:
-Done! I've successfully downgraded him from premium to normal tier.
-
-You: What's his tier now?
-💬 Response:
-His tier is now set to normal.
-
-You: Create a ticket to Sam about login issue
-💬 Response:
-I've created ticket TKT-45131 and assigned it to Sam...
-
-You: quit
-Goodbye! 👋
-```
-
-**Conversation history is stored in:** `./history/current_session.json`
-
-### Single Command Mode
-
-For one-off commands or scripting:
-
-```bash
-# With confirmation prompt
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all VIP contacts"
-
-# Auto-approve (for scripts)
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all VIP contacts" --trust
-
-# Preview only (dry-run)
-docker compose exec wati-conductor python -m conductor.cli \
-  "Send flash_sale template to Jakarta contacts" --dry-run
-
-# Verbose output
-docker compose exec wati-conductor python -m conductor.cli \
-  "Add escalated tag to contact 6281234567890" --verbose
-
-```
-
-**Get Contact Info:**
-```bash
-docker compose exec wati-conductor python -m conductor.cli \
-  "Show me details for 6281234567890"
-
-# Interactive confirmation before fetching
-```
-
-### Real-World Scenarios
-
-**1. VIP Customer Outreach**
-```bash
-# Preview the plan
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all VIP contacts and send them renewal_reminder template" --dry-run
-
-# Execute with confirmation
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all VIP contacts and send them renewal_reminder template"
-
-# Or auto-approve
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all VIP contacts and send them renewal_reminder template" --trust
-```
-
-**2. Segmented Campaign**
-```bash
-docker compose exec wati-conductor python -m conductor.cli \
-  "Send flash_sale template to all contacts in Jakarta"
-```
-
-**3. Contact Attribute Update**
-```bash
-docker compose exec wati-conductor python -m conductor.cli \
-  "Update contact 628123450000 tier to premium"
-```
-
-**4. Support Escalation**
-```bash
-docker compose exec wati-conductor python -m conductor.cli \
-  "Escalate contact 628123450000 to Support team and add escalated tag"
-```
-
-**5. Bulk Contact Discovery**
-```bash
-docker compose exec wati-conductor python -m conductor.cli \
-  "Find all contacts tagged new_signup and tell me who they are" --verbose
-```
-
-### Command-Line Options
-
-| Option | Description | Example |
-|--------|-------------|---------|
-| (none) | Interactive mode - prompts for confirmation | `python -m conductor.cli "..."` |
-| `--trust` | Auto-approve all tool executions | `python -m conductor.cli "..." --trust` |
-| `--dry-run` | Preview plan without executing | `python -m conductor.cli "..." --dry-run` |
-| `--verbose` | Show detailed execution plan table | `python -m conductor.cli "..." --verbose` |
-
-### Interactive Confirmation Behavior
-
-**Default Mode (Safe):**
-- Shows execution plan
-- Prompts: `Proceed? [Y/n]:`
-- Press **Enter** or type `y`/`yes` → Execute
-- Type `n`/`no` → Cancel
-- Invalid input → 3 attempts, then auto-cancel
-
-**Trust Mode (Convenience):**
-- Use `--trust` flag
-- Skips confirmation prompt
-- Executes immediately after planning
-- Still shows tool execution progress
-
-**Dry-Run Mode (Preview):**
-- Use `--dry-run` flag
-- Shows plan only
-- Never executes tools
-- No confirmation needed
+| Category | Tools |
+|----------|-------|
+| **Contacts** (8) | `search_contacts`, `get_contact_info`, `add_contact_tag`, `add_contact_tag_batch`, `remove_contact_tag`, `remove_contact_tag_batch`, `update_contact_attributes`, `update_contact_attributes_batch` |
+| **Messages** (2) | `send_session_message`, `send_template_message_batch` |
+| **Templates** (2) | `list_templates`, `get_template_details` |
+| **Operators** (2) | `assign_operator`, `assign_team` |
+| **Tickets** (2) | `create_ticket`, `resolve_ticket` |
 
 ## Architecture
 
-### Multi-Task Intent System
-
-The agent uses a **simplified LLM-first architecture** where the LLM directly generates executable tasks:
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     LangGraph State Machine                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  [Parse Node]                                               │
-│    ↓ (LLM: decompose instruction into tasks)               │
-│    Intent: {                                                │
-│      tasks: [                                               │
-│        {tool: "search_contacts", params: {...}, conf: 0.95},│
-│        {tool: "send_template", params: {...}, conf: 0.90}   │
-│      ],                                                     │
-│      overall_confidence: 0.92                               │
-│    }                                                        │
-│                                                             │
-│  [Execute Node]                                             │
-│    ↓ (for each task with confidence >= 0.7)                │
-│    ├─ Resolve params ($task_N.field references)            │
-│    ├─ User confirmation (unless trust mode)                │
-│    └─ Execute tool → append result                         │
-│                                                             │
-│  [Response Node]                                            │
-│    ↓ (LLM: generate natural language response)             │
-│    Final Response                                           │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+agent_node ──(tool call)──► tool_node ──► agent_node  (loop)
+    │
+    └──(text response)──► END
 ```
 
-### Key Implementation Details
+Two-node LangGraph ReAct loop:
 
-**1. Task Decomposition (Parser)**
+- **agent_node** — LLM reasons about current state, selects one tool or responds with text
+- **tool_node** — Executes the tool (with optional user confirmation), returns result
+
+The LLM uses native tool calling via `bind_tools` — no JSON parsing or structured output extraction.
+
+### State
+
 ```python
-# conductor/agent/parser.py
-async def parse_intent(instruction: str) -> Intent:
-    llm = get_llm(temperature=0.0)
-    response = await llm.ainvoke([
-        SystemMessage(content=SYSTEM_PROMPT),  # Examples of task decomposition
-        HumanMessage(content=f"User: {instruction}")
-    ])
-    intent = Intent(**extract_json(response.content))
-    # Filter by confidence
-    intent.tasks = [t for t in intent.tasks if t.confidence >= 0.7]
-    return intent
+class AgentState(TypedDict, total=False):
+    messages: Annotated[list[AnyMessage], add_messages]  # All conversation messages
+    iteration_count: int       # Think-act-observe cycles
+    trust_mode: bool           # Skip confirmations
+    mode: Literal["execute", "dry-run"]
 ```
-
-**2. Dependency Resolution (Executor)**
-```python
-# conductor/agent/nodes/execute.py
-def _resolve_params(params: dict, prior_results: list) -> dict:
-    for key, value in params.items():
-        if isinstance(value, str) and value.startswith("$task_"):
-            # "$task_0.contacts" → prior_results[0]["result"]["contacts"]
-            parts = value.split(".")
-            task_idx = int(parts[0].replace("$task_", ""))
-            result = prior_results[task_idx]["result"]
-            for field in parts[1:]:
-                result = result[field]
-            params[key] = result
-    return params
-```
-
-**3. Interactive Confirmation**
-```python
-# conductor/agent/nodes/execute.py
-for task in intent.tasks:
-    params = _resolve_params(task.params, results)
-
-    if not trust_mode:
-        print(f"Tool: {task.tool}")
-        print(f"Description: {task.description}")
-        print(f"Parameters: {params}")
-        response = input("Execute this tool? [Y/n/q]: ")
-        if response == 'n':
-            return {"user_rejected": True, "rejected_tool": task.tool}
-
-    result = await tool.ainvoke(params)
-    results.append({"task": task, "result": result})
-```
-
-### Available Tools
-
-All tools are LangChain `@tool` decorated functions:
-
-**Contacts:**
-- `search_contacts(tag, attribute_name, attribute_value)` - Search contacts
-- `get_contact_info(whatsapp_number)` - Get contact details
-- `update_contact_attributes(whatsapp_number, attributes)` - Update custom attributes
-
-**Messages:**
-- `send_session_message(whatsapp_number, message_text)` - Send text message
-- `send_template_message_batch(contacts, template_name, params)` - Bulk send template (🔥 destructive)
-
-**Templates:**
-- `get_template_details(template_name)` - Get template parameters
-- `list_templates()` - List all available templates
-
-**Tickets:**
-- `create_ticket(subject, assignee, priority)` - Create support ticket
-- `resolve_ticket(ticket_id, resolution)` - Resolve ticket
-
-**Operators:**
-- `assign_operator(whatsapp_number, team_name)` - Assign conversation to team
 
 ## Project Structure
 
 ```
 wati-conductor/
 ├── conductor/
-│   ├── agent.py              # LangGraph agent graph definition
-│   ├── cli.py                # Click CLI interface
-│   ├── config.py             # Pydantic settings
-│   ├── models/               # Pydantic models (Intent, Plan, State)
-│   ├── clients/              # WATI API clients (mock/real)
-│   │   ├── factory.py
-│   │   ├── mock.py
-│   │   └── real.py
-│   └── tools/                # LangChain tools
-│       ├── contacts.py
-│       ├── messages.py
-│       ├── templates.py
-│       └── operators.py
-├── tests/                    # Pytest tests
-├── Dockerfile                # Optimized multi-layer build
-├── docker-compose.yaml       # Container orchestration
-├── pyproject.toml            # Poetry dependencies
-└── README.md
+│   ├── agent/
+│   │   ├── react_graph.py     # ReAct LangGraph loop
+│   │   ├── react_nodes.py     # agent_node + tool_node
+│   │   ├── llm_factory.py     # LLM provider routing + bind_tools
+│   │   ├── parser.py          # (legacy) structured output parser
+│   │   └── planner.py         # (legacy) rule-based planner
+│   ├── models/
+│   │   ├── state.py           # AgentState (message-based)
+│   │   └── wati.py            # Contact, Template, Message models
+│   ├── tools/                 # 16 LangChain @tool functions
+│   ├── clients/               # Mock + Real WATI API clients
+│   ├── cli.py                 # Click CLI (REPL + single-shot)
+│   ├── config.py              # Pydantic settings from .env
+│   └── history.py             # Conversation persistence (JSON)
+├── docs/                      # Full documentation (mkdocs)
+├── tests/
+├── mock_data/                 # 50 contacts, 6 templates
+├── Dockerfile
+├── docker-compose.yaml
+└── pyproject.toml
 ```
+
+## Documentation
+
+Full docs available via mkdocs:
+
+```bash
+cd mkdocs && docker compose -f docker-compose.docs.yml up -d
+# Open http://localhost:9104
+```
+
+| Doc | Content |
+|-----|---------|
+| [Architecture](docs/architecture.md) | ReAct loop diagrams, state schema, data flow |
+| [Components](docs/components.md) | Module breakdown — agent, tools, clients, models |
+| [Status](docs/status.md) | What's implemented, what's planned |
+| [Roadmap](docs/roadmap.md) | V4 vision, RAG knowledge base plan |
+| [Setup](docs/setup.md) | Detailed configuration and troubleshooting |
+| [Dev Notes](docs/dev-notes.md) | Build notes and design trade-offs |
 
 ## Development
 
-### Local Setup (without Docker)
-
 ```bash
-# Install dependencies
 poetry install
 
 # Run tests
-poetry run pytest
+pytest tests/ -v
 
-# Run CLI
-poetry run python -m conductor.cli "your instruction"
+# Code quality
+black conductor/ tests/
+isort conductor/ tests/
+mypy conductor/
+ruff check conductor/
 ```
-
-### Code Quality
-
-```bash
-# Format
-poetry run black conductor/ tests/
-poetry run isort conductor/ tests/
-
-# Type check
-poetry run mypy conductor/
-
-# Lint
-poetry run ruff check conductor/
-```
-
-## Features
-
-- 🎯 **Natural Language Interface**: Non-technical users can automate WhatsApp operations through conversation
-- 🧠 **Multi-Task Intent**: LLM decomposes complex instructions into executable tasks
-- 🔗 **Dependency Resolution**: Tasks can reference previous task results (`$task_N.field`)
-- 🎚️ **Confidence Filtering**: Only executes tasks with confidence >= 0.7
-- 🛡️ **Interactive Confirmation**: Step-by-step approval before each tool execution
-- 🚀 **Trust Mode**: Skip confirmations for rapid execution
-- 💬 **Conversational Context**: Multi-turn conversations with automatic history tracking
-- 🔄 **Interactive Mode**: Persistent chat session, no need to restart for each command
-- 🔁 **Error Recovery**: Auto-retry on failures, stays alive for rephrasing
-- 📊 **Rich CLI**: Professional output with clear separation of thinking vs. response
-- 🔌 **Mock/Real Toggle**: Develop with mock API, deploy with real WATI client
-- 🎫 **Ticket Management**: Create and resolve support tickets with staff assignment
-
-
-## Troubleshooting
-
-**Q: CLI shows `TyperArgument.make_metavar()` error**
-A: This is a typer 0.12.5 + click 8.3.2 compatibility issue. Fixed by using click directly. Rebuild image: `docker build -t wati-conductor:v1 .`
-
-**Q: No logs in `docker compose logs`**
-A: Container runs in interactive mode (`command: /bin/bash`). Logs appear when you execute commands via `docker compose exec`.
-
-**Q: How to use real WATI API?**
-A: Set `USE_MOCK=false` in `.env` and provide `WATI_TENANT_ID` and `WATI_TOKEN`.
-
-**Q: How to see tool execution details?**
-A: Use `--verbose` flag to see detailed execution plan table with tool dependencies.
-
-**Q: How to skip confirmation prompts?**
-A: Use `--trust` flag to auto-approve all tool executions.
-
-**Q: What inputs are accepted for confirmation?**
-A:
-- **Yes**: `y`, `yes`, `Y`, `YES`, `YeS`, or just press Enter (default)
-- **No**: `n`, `no`, `N`, `NO`
-- **Invalid**: You get 3 attempts before auto-cancel
-
-**Q: Can I preview actions without executing?**
-A: Yes, use `--dry-run` flag to see the execution plan without running tools.
-
-**Q: How do I know which tools will be called?**
-A: The CLI always shows the execution plan before asking for confirmation. Look for the "🤔 Agent Thinking" section.
-
-**Q: What does the 🔥 symbol mean?**
-A: It indicates a destructive action (e.g., sending messages, deleting data) that requires extra caution.
 
 ## Roadmap
 
-- [x] ReAct agent with LangGraph
-- [x] LangChain tool integration
-- [x] Mock WATI client
-- [x] Rich CLI with dry-run
+- [x] ReAct agent with LangGraph (v3)
+- [x] 16 LangChain tools
+- [x] Mock WATI client (50 contacts, 6 templates)
+- [x] Rich CLI with dry-run, trust mode
 - [x] Docker deployment
-- [x] Multi-turn conversations with history tracking
-- [x] Natural language response generation
-- [ ] Real WATI API client
+- [x] Multi-turn conversations with history
+- [x] Dynamic replanning and error reasoning
 - [ ] Streaming responses
+- [ ] RAG knowledge base (SOPs + guardrails)
+- [ ] Real WATI API integration testing
 - [ ] Web UI (chat interface)
 - [ ] LangSmith tracing
+- [ ] Session persistence (LangGraph checkpointer)
 
 ## License
 
 MIT License
-
-## Acknowledgments
-
-- **LangChain/LangGraph**: ReAct agent framework
-- **WATI**: WhatsApp Business API platform
-- **Anthropic & DeepSeek**: LLM providers
-- **Rich**: Beautiful CLI output
