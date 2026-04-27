@@ -1,6 +1,55 @@
 # Dev Notes
 
-Build notes, problem framing, and design trade-offs from the initial development of WATI Conductor. Written by Zachary during the v1 build.
+Build notes, problem framing, and design trade-offs from the development of WATI Conductor.
+
+## ReAct Refactor (v3) — 2026-04-27
+
+### Why ReAct
+
+The v2 architecture claimed to be "LLM-first" but was actually Plan-then-Execute: one LLM call generated ALL tasks upfront, then they were executed sequentially with no feedback loop. This meant:
+
+- If `search_contacts` returned 0 results, the agent still tried to send templates to an empty list
+- Tool errors crashed the pipeline — the LLM never saw the error
+- No dynamic replanning — the plan was fixed at parse time
+
+ReAct fixes all of this. The LLM reasons step-by-step: call one tool, observe the result, decide what to do next. If a search returns nothing, the LLM says "no results found" instead of blindly proceeding.
+
+### What Changed
+
+| Before (v2) | After (v3) |
+|---|---|
+| `parser.py` — structured output extraction | Native tool calling via `bind_tools` |
+| `graph.py` — 3-node graph (parse → execute → response) | `react_graph.py` — 2-node loop (agent ↔ tool) |
+| `nodes/execute.py` — sequential executor with `$task_N` resolution | `react_nodes.py` — tool_node with confirmation gate |
+| `nodes/response.py` — separate LLM call for response | agent_node generates final response naturally |
+| `AgentState` with intent/results/errors fields | `AgentState` with `messages` list (standard LangGraph pattern) |
+| 2 LLM calls per instruction | N LLM calls (one per think-act-observe cycle) |
+
+### Key Decisions
+
+**DeepSeek v4 Pro as default**: ReAct needs stronger reasoning than plan-execute. The v4 Pro model handles multi-step tool selection reliably. Flash is available as a cheaper fallback.
+
+**Thinking mode disabled**: DeepSeek v4 models default to thinking mode enabled, which ignores temperature/top_p and adds latency. Since we're making multiple LLM calls per instruction, the latency compounds. Disabled via `extra_body={"thinking": {"type": "disabled"}}`.
+
+**Custom tool_node instead of LangGraph's ToolNode**: We need the human-in-the-loop confirmation gate (print tool details, ask `[Y/n/q]`). LangGraph's built-in `ToolNode` doesn't support this. When the user rejects, we return `ToolMessage("User rejected this tool execution.")` — the LLM observes this naturally and responds accordingly.
+
+**Message-based state**: Instead of separate fields for intent, execution results, and errors, everything flows through the `messages` list. This is the standard LangGraph ReAct pattern and dramatically simplifies the state schema.
+
+### Files Changed
+
+- **New**: `react_graph.py`, `react_nodes.py`
+- **Modified**: `llm_factory.py` (added `get_react_llm`), `config.py` (added `llm_react_model`, `max_react_iterations`), `cli.py` (simplified `run_instruction`), `state.py` (message-based), `__init__.py` (re-export from react_graph)
+- **Legacy** (kept for reference): `graph.py`, `parser.py`, `planner.py`, `nodes/`, `models/intent.py`, `models/plan.py`
+
+### Cost Implications
+
+ReAct uses more LLM calls than plan-execute. A simple "find VIP contacts" is 2 iterations (search + respond). A complex "find VIPs, send template, tag them" is 4-5 iterations. At DeepSeek v4 Pro pricing this is still very cheap, but token tracking should be added for production use.
+
+---
+
+*Original v1 build notes below.*
+
+---
 
 ## Problem Framing
 

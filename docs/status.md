@@ -1,24 +1,34 @@
 # Status
 
-Current state of WATI Conductor as of v1 completion. Compiled from code verification, function checklist, and completion reports.
+Current state of WATI Conductor as of the ReAct refactor (v3 architecture).
 
 ## Implementation Status
 
-### Core Agent (v2 architecture)
+### Core Agent (v3 — ReAct architecture)
 
 | Component | Status | Notes |
 |---|---|---|
-| LangGraph state machine (3 nodes) | ✅ Done | `parse → execute → response` |
-| LLM intent parsing (structured output) | ✅ Done | DeepSeek default, Claude/OpenAI swappable |
-| Multi-task decomposition | ✅ Done | LLM generates task list directly |
-| Inter-task dependency resolution (`$task_N`) | ✅ Done | Executor resolves at runtime |
-| Confidence-based filtering (≥ 0.7) | ✅ Done | Per-task and overall |
+| ReAct loop (2-node LangGraph) | ✅ Done | `agent_node` ↔ `tool_node` loop |
+| LLM native tool calling (`bind_tools`) | ✅ Done | DeepSeek v4 Pro default, Claude/OpenAI swappable |
+| Step-by-step reasoning | ✅ Done | LLM reasons about each tool result before next action |
+| Dynamic replanning | ✅ Done | Adapts to empty results, errors, unexpected outputs |
+| Max iteration safety (default 10) | ✅ Done | Configurable via `MAX_REACT_ITERATIONS` |
 | User confirmation per tool | ✅ Done | Skippable via trust mode |
-| Conversation history (2-turn context) | ✅ Done | JSON file, emoji-stripped |
-| Error handling with retry (2 retries) | ✅ Done | Basic — stops on first tool error |
-| Dry-run mode | ✅ Done | Shows plan without executing |
+| Conversation history (2-turn context) | ✅ Done | JSON file, injected into system prompt |
+| Error reasoning | ✅ Done | LLM observes tool errors and suggests alternatives |
+| Dry-run mode | ✅ Done | Shows first planned action without executing |
 
-### Tools (16 total)
+### Previous Architecture (v2 — Plan-then-Execute)
+
+| Component | Status | Notes |
+|---|---|---|
+| LLM intent parsing (structured output) | ⚠️ Legacy | `parser.py` retained but not wired into graph |
+| Multi-task decomposition | ⚠️ Legacy | Replaced by ReAct step-by-step reasoning |
+| Inter-task dependency resolution (`$task_N`) | ⚠️ Legacy | Not needed — LLM passes data via message history |
+| Confidence-based filtering (≥ 0.7) | ⚠️ Legacy | Not needed — LLM decides per-step |
+| 3-node graph (parse → execute → response) | ⚠️ Legacy | `graph.py` retained but replaced by `react_graph.py` |
+
+### Tools (16 total — unchanged)
 
 | Category | Tool | Status |
 |---|---|---|
@@ -67,6 +77,7 @@ Current state of WATI Conductor as of v1 completion. Compiled from code verifica
 | `--dry-run` flag | ✅ Done |
 | `--verbose` flag | ✅ Done |
 | `--trust` flag | ✅ Done |
+| Iteration count display | ✅ Done |
 | Streaming responses | ❌ Not implemented |
 | Meta commands (`/help`, `/history`) | ❌ Not implemented |
 
@@ -74,29 +85,29 @@ Current state of WATI Conductor as of v1 completion. Compiled from code verifica
 
 | Test | Status |
 |---|---|
-| Parser unit tests (`test_parser.py`) | ✅ 5/5 pass |
-| Planner unit tests (`test_planner.py`) | ✅ 4/4 pass |
-| Graph integration test (`manual_test_graph.py`) | ✅ 3/3 pass |
-| Parse→Plan flow test (`manual_test_flow.py`) | ✅ 4/4 pass |
-| Demo script (`demo.sh`) | ✅ 5 scenarios pass |
+| Parser unit tests (`test_parser.py`) | ⚠️ Legacy (tests v2 parser) |
+| Planner unit tests (`test_planner.py`) | ⚠️ Legacy (tests v1 planner) |
+| Graph integration test (`manual_test_graph.py`) | ⚠️ Needs update for ReAct |
+| Parse→Plan flow test (`manual_test_flow.py`) | ⚠️ Legacy (tests v2 flow) |
+| ReAct loop integration tests | ❌ Not yet written |
 | Automated CI/CD | ❌ Not set up |
 
-## Not Implemented (Planned for V2)
+## Not Implemented (Planned)
 
 ### High Priority
 
+- [ ] ReAct loop integration tests
 - [ ] Real WATI API integration testing (mock works, real untested in production)
 - [ ] Streaming responses (token-by-token display)
-- [ ] Advanced error recovery (retry per tool, fallback strategies)
-- [ ] Rollback on partial failure
+- [ ] Update existing tests for ReAct architecture
 
 ### Medium Priority
 
 - [ ] Web UI (chat interface)
 - [ ] LangSmith tracing integration
-- [ ] Batch optimization (parallel tool execution where no dependencies)
-- [ ] Session persistence across restarts (currently in-memory per Docker run)
+- [ ] Session persistence across restarts (LangGraph checkpointer)
 - [ ] Meta commands in REPL (`/help`, `/history`, `/clear`, `/sessions`)
+- [ ] RAG knowledge base for SOPs and guardrails
 
 ### Low Priority
 
@@ -114,37 +125,37 @@ Comprehensive feature matrix for production AI agents. Current implementation st
 
 | Feature | Status | Notes |
 |---|---|---|
-| Short-term memory (session history) | ✅ Partial | 2-turn sliding window |
+| Short-term memory (session history) | ✅ Partial | 2-turn sliding window in system prompt |
+| Within-turn memory | ✅ Done | Full message history within ReAct loop |
 | Long-term memory (cross-session) | ❌ | No vector DB or persistent store |
 | Context window management | ✅ Partial | Fixed 2-turn limit, no summarization |
-| Side-conversation isolation | ❌ | Interrupts pollute main context |
-| Workspace awareness | ❌ | Not applicable (CLI agent) |
 
 ### Reasoning & Planning
 
 | Feature | Status | Notes |
 |---|---|---|
-| Task decomposition | ✅ Done | LLM-powered multi-task parsing |
-| Reflection & self-correction | ❌ | Stops on error, no self-repair |
-| Visible thinking process | ✅ Done | Shows tasks + confidence before execution |
-| Dynamic interruption | ❌ | Cannot interrupt mid-execution |
+| Step-by-step reasoning | ✅ Done | ReAct think-act-observe cycle |
+| Dynamic replanning | ✅ Done | LLM adapts based on tool results |
+| Error reasoning | ✅ Done | LLM observes errors and suggests alternatives |
+| Visible thinking process | ✅ Partial | Tool calls shown, but LLM reasoning not streamed |
+| Dynamic interruption | ❌ | Cannot interrupt mid-iteration |
 
 ### Tool Use & Execution
 
 | Feature | Status | Notes |
 |---|---|---|
-| Function calling | ✅ Done | 16 LangChain tools |
+| Native tool calling | ✅ Done | 16 LangChain tools via `bind_tools` |
+| One-at-a-time execution | ✅ Done | ReAct pattern — observe before next action |
 | RAG integration | ❌ | No knowledge base |
-| Tool fallback & retry | ✅ Partial | 2 retries at graph level, not per-tool |
+| Tool error recovery | ✅ Done | LLM reasons about errors in next iteration |
 | Sandboxed execution | ✅ Partial | Docker container, but no code execution sandbox |
 
 ### Hallucination Mitigation
 
 | Feature | Status | Notes |
 |---|---|---|
-| Grounding & citations | ❌ | No source attribution |
-| Confidence scoring | ✅ Done | Per-task confidence filtering |
-| Temperature tuning | ✅ Done | 0.0 for parsing, 0.7 for responses |
+| Grounding via tool results | ✅ Done | LLM bases responses on actual tool outputs |
+| Temperature tuning | ✅ Done | 0.0 for all ReAct calls |
 | Cross-verification | ❌ | No critic agent |
 
 ### Security & Guardrails
@@ -154,22 +165,23 @@ Comprehensive feature matrix for production AI agents. Current implementation st
 | Input guardrails | ❌ | No prompt injection defense |
 | Output guardrails | ❌ | No content filtering |
 | Human-in-the-loop | ✅ Done | Per-tool confirmation prompts |
+| Max iteration safety | ✅ Done | Configurable limit (default 10) |
 | Permission control | ❌ | No RBAC |
 
 ### UX
 
 | Feature | Status | Notes |
 |---|---|---|
-| Streaming output | ❌ | Waits for full LLM response |
+| Streaming output | ❌ | Waits for full LLM response per iteration |
 | Multi-modal input | ❌ | Text only |
-| Rich UI components | ✅ Partial | Rich panels and colors, no interactive widgets |
-| Suggested actions | ❌ | No predictive prompts |
+| Rich UI components | ✅ Partial | Rich panels and colors |
+| Iteration count display | ✅ Done | Shows cycle count after response |
 
 ### Observability
 
 | Feature | Status | Notes |
 |---|---|---|
 | Full tracing | ❌ | No LangSmith integration |
-| Token cost auditing | ❌ | No token tracking |
+| Token cost auditing | ❌ | No token tracking (important for ReAct — more LLM calls) |
 | Feedback collection | ❌ | No thumbs up/down |
-| Automated testing | ✅ Partial | Manual test scripts, no CI |
+| Automated testing | ❌ | Legacy tests need update for ReAct |

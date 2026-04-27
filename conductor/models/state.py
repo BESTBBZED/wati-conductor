@@ -1,31 +1,32 @@
 """LangGraph agent state definition."""
 
-from typing import TypedDict, Literal
-from conductor.models.intent import Intent
-from conductor.models.plan import ExecutionPlan
+from typing import Annotated, Literal, TypedDict
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict, total=False):
-    """Shared state passed between LangGraph nodes.
+    """Shared state passed between ReAct graph nodes.
 
-    All fields are optional (``total=False``) so each node only needs
-    to return the keys it modifies.
+    Uses a message list as the primary data channel — each LLM response
+    and tool result is appended as a LangChain message object.
     """
 
-    # Input
-    instruction: str
-    mode: Literal["execute", "dry-run"]
+    messages: Annotated[list[AnyMessage], add_messages]
+    """Conversation messages (system, human, AI, tool)."""
+
+    iteration_count: int
+    """Number of think-act-observe cycles completed so far."""
+
     trust_mode: bool
+    """When True, skip per-tool confirmation prompts."""
 
-    # Parsing
-    intent: Intent | None
+    mode: Literal["execute", "dry-run"]
+    """Execution mode."""
 
-    # Execution
-    execution_results: list[dict]
-    execution_errors: list[dict]
     user_rejected: bool
-    rejected_tool: str
+    """Set to True when the user declines a tool execution."""
 
-    # Output
-    final_response: str
-    success: bool
+    rejected_tool: str
+    """Name of the tool the user rejected."""

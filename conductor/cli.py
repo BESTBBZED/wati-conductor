@@ -1,153 +1,124 @@
 """CLI interface for WATI Conductor — interactive REPL and single-command mode."""
 
 import asyncio
+import logging
 import sys
+
 import click
+from langchain_core.messages import HumanMessage
+from langgraph.graph.state import CompiledStateGraph
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
-
-from langgraph.graph.state import CompiledStateGraph
 
 from conductor.agent import create_agent_graph
 from conductor.history import save_conversation_turn
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
-async def run_instruction(instruction: str, agent: CompiledStateGraph, trust: bool = False) -> tuple[bool, str]:
-    """Execute one user instruction through the agent graph.
+async def run_instruction(
+    instruction: str,
+    agent: CompiledStateGraph,
+    trust: bool = False,
+    dry_run: bool = False,
+) -> tuple[bool, str]:
+    """Execute one user instruction through the ReAct agent graph.
 
     Args:
         instruction: Natural language instruction.
         agent: Compiled LangGraph agent.
         trust: If True, skip per-tool confirmation prompts.
+        dry_run: If True, show planned action without executing.
 
     Returns:
         ``(success, response_text)`` tuple.
     """
-
     state = {
-        "instruction": instruction,
-        "mode": "dry-run",
+        "messages": [HumanMessage(content=instruction)],
+        "iteration_count": 0,
         "trust_mode": trust,
-        "intent": None,
-        "execution_results": [],
-        "execution_errors": [],
-        "final_response": "",
-        "success": False,
-        "user_rejected": False
+        "mode": "dry-run" if dry_run else "execute",
+        "user_rejected": False,
+        "rejected_tool": "",
     }
 
-    max_retries = 2
-    retry_count = 0
+    try:
+        result = await agent.ainvoke(state)
+    except Exception as exc:
+        logger.error("Agent invocation failed: %s", exc)
+        console.print(f"\n[red]❌ Error: {exc}[/red]\n")
+        return False, f"Error: {exc}"
 
-    while retry_count <= max_retries:
-        try:
-            # Run agent
-            result = await agent.ainvoke(state)
+    # The last message is the agent's final text response
+    final_msg = result["messages"][-1]
+    response = final_msg.content if hasattr(final_msg, "content") else str(final_msg)
+    iterations = result.get("iteration_count", 0)
 
-            # Show thinking
-            intent = result.get("intent")
+    # Dry-run: show what the agent would do
+    if dry_run and hasattr(final_msg, "tool_calls") and final_msg.tool_calls:
+        tc = final_msg.tool_calls[0]
+        console.print(f"\n[dim]🔍 Dry-run — agent would call:[/dim]")
+        console.print(f"[dim]   Tool: {tc['name']}[/dim]")
+        console.print(f"[dim]   Args: {tc['args']}[/dim]\n")
+        return True, f"Dry-run: would call {tc['name']}"
 
-            if intent:
-                console.print(f"\n[dim]🤔 Agent Thinking:[/dim]\n")
-                console.print(f"[dim]Tasks: {len(intent.tasks)} (confidence: {intent.overall_confidence:.2f})[/dim]")
-                for i, task in enumerate(intent.tasks):
-                    console.print(f"[dim]  {i+1}. {task.description} (confidence: {task.confidence:.2f})[/dim]")
+    # Show response
+    if response:
+        console.print("\n" + "=" * 80)
+        console.print("\n[bold cyan]💬 Response:[/bold cyan]\n")
+        console.print(response)
+        console.print(f"\n[dim]({iterations} iteration{'s' if iterations != 1 else ''})[/dim]\n")
 
-            # Execute plan
-            if intent and intent.tasks:
-                console.print("\n[bold]🔧 Tool Execution:[/bold]")
-                console.print(f"Plan has {len(intent.tasks)} task(s). Will execute one at a time.\n")
-
-                # Execute
-                state["mode"] = "execute"
-                result = await agent.ainvoke(state)
-
-                if trust:
-                    console.print("[green]✓ Auto-approved (trust mode)[/green]")
-
-                # Check if user rejected
-                if result.get("user_rejected"):
-                    console.print("[yellow]⚠ Tool execution rejected by user[/yellow]\n")
-                else:
-                    console.print("[green]✓ Completed[/green]\n")
-
-            # Get response
-            response = result.get("final_response", "")
-            if response:
-                console.print("=" * 80)
-                console.print("\n[bold cyan]💬 Response:[/bold cyan]\n")
-                console.print(response)
-                console.print()
-
-            # Save to history
-            save_conversation_turn(instruction, response)
-
-            return True, response
-
-        except Exception as e:
-            retry_count += 1
-            if retry_count <= max_retries:
-                console.print(f"\n[yellow]⚠ Error occurred: {str(e)}[/yellow]")
-                console.print(f"[yellow]Retrying... (attempt {retry_count}/{max_retries})[/yellow]\n")
-                await asyncio.sleep(1)
-            else:
-                console.print(f"\n[red]❌ Failed after {max_retries} retries: {str(e)}[/red]")
-                console.print("[yellow]Something went wrong. Please try rephrasing your request.[/yellow]\n")
-                return False, f"Error: {str(e)}"
-
-    return False, "Max retries exceeded"
+    save_conversation_turn(instruction, response)
+    return True, response
 
 
 async def interactive_loop() -> None:
     """Run the interactive REPL — reads instructions in a loop until the user quits."""
-    console.print(Panel.fit(
-        "[bold cyan]WATI Conductor - Interactive Mode[/bold cyan]\n"
-        "Type your instructions naturally. Type 'quit' or 'exit' to stop.\n"
-        "Type 'trust' to toggle auto-approval mode.",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold cyan]WATI Conductor - Interactive Mode[/bold cyan]\n"
+            "Type your instructions naturally. Type 'quit' or 'exit' to stop.\n"
+            "Type 'trust' to toggle auto-approval mode.",
+            border_style="cyan",
+        )
+    )
 
-    # Create agent once
     agent = create_agent_graph()
     trust_mode = False
     interrupt_count = 0
 
     while True:
         try:
-            # Get user input
             user_input = Prompt.ask("\n[bold green]You[/bold green]")
-
-            # Reset interrupt counter on successful input
             interrupt_count = 0
 
             if not user_input.strip():
                 continue
 
-            # Check for commands
-            if user_input.lower() in ["quit", "exit", "q"]:
+            if user_input.lower() in ("quit", "exit", "q"):
                 console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
                 break
 
-            if user_input.lower() in ["trust", "--trust"]:
+            if user_input.lower() in ("trust", "--trust"):
                 trust_mode = not trust_mode
                 status = "enabled ✓" if trust_mode else "disabled"
                 console.print(f"\n[yellow]Trust mode {status}[/yellow]\n")
                 continue
 
-            # Run instruction
-            success, response = await run_instruction(user_input, agent, trust_mode)
+            await run_instruction(user_input, agent, trust_mode)
 
         except KeyboardInterrupt:
             interrupt_count += 1
             if interrupt_count == 1:
-                console.print("\n\n[yellow]Interrupted. Press Ctrl+C again to exit or continue with another request.[/yellow]\n")
+                console.print(
+                    "\n\n[yellow]Interrupted. Press Ctrl+C again to exit.[/yellow]\n"
+                )
                 continue
-            else:
-                console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
-                break
+            console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
+            break
         except EOFError:
             console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
             break
@@ -163,24 +134,26 @@ def run(instruction: str, dry_run: bool, verbose: bool, trust: bool) -> None:
 
     If no instruction is provided, starts interactive mode.
     """
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG)
+
     if not instruction:
-        # No instruction provided, start interactive mode
         try:
             asyncio.run(interactive_loop())
         except KeyboardInterrupt:
             console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
             sys.exit(0)
     else:
-        # Single command mode (legacy)
         asyncio.run(_run_single_command(instruction, dry_run, verbose, trust))
 
 
-async def _run_single_command(instruction: str, dry_run: bool, verbose: bool, trust: bool) -> None:
+async def _run_single_command(
+    instruction: str, dry_run: bool, verbose: bool, trust: bool
+) -> None:
     """Run a single instruction from the command line (non-interactive)."""
     console.print(f"\n[bold cyan]Instruction:[/bold cyan] {instruction}\n")
-
     agent = create_agent_graph()
-    success, response = await run_instruction(instruction, agent, trust)
+    await run_instruction(instruction, agent, trust, dry_run)
 
 
 def main() -> None:

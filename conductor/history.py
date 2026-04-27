@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-_HISTORY_DIR = Path("/app/history")
+_HISTORY_DIR = Path(__file__).resolve().parent.parent / "history"
 _CURRENT_SESSION_FILE = _HISTORY_DIR / "current_session.json"
 
 

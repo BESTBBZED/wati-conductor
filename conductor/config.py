@@ -14,10 +14,14 @@ class Settings(BaseSettings):
     use_mock: bool = True
     dry_run_default: bool = False
 
-    # LLM Configuration - Multi-model routing
-    llm_parse_model: str = "deepseek-chat"
-    llm_plan_model: str = "deepseek-chat"
-    llm_clarify_model: str = "deepseek-chat"
+    # LLM Configuration — ReAct agent model
+    llm_react_model: str = "deepseek-v4-pro"
+    max_react_iterations: int = 10
+
+    # Legacy model routing (kept for backward compat, unused by ReAct graph)
+    llm_parse_model: str = "deepseek-v4-flash"
+    llm_plan_model: str = "deepseek-v4-flash"
+    llm_clarify_model: str = "deepseek-v4-flash"
 
     # API Keys
     deepseek_api_key: str = ""

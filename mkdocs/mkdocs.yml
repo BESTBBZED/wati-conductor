@@ -38,8 +38,12 @@ nav:
   - Setup: setup.md
   - Dev Notes: dev-notes.md
   - Specs:
-    - Overview: specs/v1/README.md
-    - Requirements: specs/v1/requirements.md
-    - Design: specs/v1/design.md
-    - Tasks: specs/v1/tasks.md
-    - Summary: specs/v1/SUMMARY.md
+    - V1 (Original):
+      - Overview: specs/v1/README.md
+      - Requirements: specs/v1/requirements.md
+      - Design: specs/v1/design.md
+      - Tasks: specs/v1/tasks.md
+      - Summary: specs/v1/SUMMARY.md
+    - ReAct Refactor:
+      - Requirements: specs/react-refactor/requirements.md
+      - Design: specs/react-refactor/design.md
