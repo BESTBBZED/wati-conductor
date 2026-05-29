@@ -10,9 +10,9 @@ Feature priorities for WATI Conductor. Consolidated from build notes, vision doc
 
 **V3** (completed — current): **ReAct refactor** — true Reasoning + Acting loop. 2-node LangGraph graph (`agent_node` ↔ `tool_node`). LLM reasons step-by-step, calls one tool at a time, observes results, adapts dynamically. Native tool calling via `bind_tools`. ~200 lines of agent code.
 
-**V4** (target): Streaming responses, RAG knowledge base for SOPs and guardrails, session persistence, web UI.
+**V4** (completed — current): **Knowledge Base & Skills** — PostgreSQL + pgvector semantic search, SOPs/guardrails/domain docs, dynamic skill management (enable/disable tool groups), ContextBuilder enriches agent system prompt, FastAPI management API, CLI commands. 19 implementation tasks across 3 phases.
 
-**V5** (future): Hard guardrail validation node, self-updating KB from conversation feedback, admin dashboard.
+**V5** (future): Streaming responses, hard guardrail validation node, session persistence, web UI, self-updating KB from conversation feedback, admin dashboard.
 
 ## Feature Priorities
 

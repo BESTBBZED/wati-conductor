@@ -9,6 +9,8 @@
 
 WATI Conductor is an AI agent that translates natural language instructions into executable WATI WhatsApp API workflows. Built with LangGraph's **ReAct (Reasoning + Acting)** pattern, the LLM reasons step-by-step — calling one tool at a time, observing the result, and deciding what to do next.
 
+The agent is enhanced by a **Knowledge Base** (SOPs, guardrails, domain knowledge) and a **Skills system** that dynamically controls which tools and instructions are active.
+
 ## Why This Matters
 
 Traditional API automation requires technical knowledge of endpoints, parameters, and error handling. WATI Conductor removes these barriers — business users describe what they want in plain English, and the agent handles the rest.
@@ -17,6 +19,7 @@ Traditional API automation requires technical knowledge of endpoints, parameters
 # Instead of writing API integration code:
 You: Find all VIP contacts and send them the welcome_wati template
 # Agent reasons through it step-by-step, adapting to results
+# KB provides: "VIP contacts must receive templates in their preferred language"
 ```
 
 ## Quick Start
@@ -26,18 +29,191 @@ You: Find all VIP contacts and send them the welcome_wati template
 cp .env.example .env
 # Edit .env with your LLM API key (see Configuration)
 
-# Start with Docker
-docker compose up -d
-docker compose exec wati-conductor python3 main.py
+# Start services (PostgreSQL + pgvector)
+docker compose up -d postgres
 
-# Or run locally
+# Install dependencies
 poetry install
+
+# Start the API server (KB + Skills management)
+poetry run uvicorn conductor.api.main:app --host 0.0.0.0 --port 8000
+
+# Start the agent (interactive mode)
 python -m conductor.cli
 ```
 
+## Knowledge Base
+
+The KB stores SOPs, guardrails, and domain knowledge that the agent retrieves via semantic search to make better decisions.
+
+### Architecture
+
+```
+User instruction → embed query → pgvector similarity search → top-K chunks → inject into system prompt → LLM reasons with context
+```
+
+### Managing the KB
+
+The KB is managed via the FastAPI API (default: `http://localhost:8000`).
+
+#### Ingest a file
+
+```bash
+curl -X POST http://localhost:8000/api/kb/documents/file \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "/path/to/sop.md",
+    "category": "sop",
+    "tags": ["vip", "contacts"],
+    "always_inject": false
+  }'
+# → {"id": "uuid", "title": "Sop", "chunk_count": 5}
+```
+
+#### Ingest a directory (bulk)
+
+```bash
+curl -X POST http://localhost:8000/api/kb/documents/directory \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dir_path": "./data/kb/sops",
+    "category": "sop",
+    "tags": ["operations"]
+  }'
+# → {"ingested": 3, "documents": [...]}
+```
+
+#### Ingest raw text
+
+```bash
+curl -X POST http://localhost:8000/api/kb/documents/text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Batch Limit Rule",
+    "content": "Never send more than 500 messages in a single batch.",
+    "category": "guardrail",
+    "tags": ["limits"],
+    "always_inject": true
+  }'
+```
+
+#### Search the KB (semantic)
+
+```bash
+curl -X POST http://localhost:8000/api/kb/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "how to handle VIP contacts", "top_k": 3}'
+# → {"results": [{"content": "...", "title": "Vip Handling", "similarity": 0.65}, ...]}
+```
+
+#### List documents
+
+```bash
+curl http://localhost:8000/api/kb/documents
+curl http://localhost:8000/api/kb/documents?category=sop
+curl http://localhost:8000/api/kb/documents?tag=vip
+```
+
+#### Delete a document
+
+```bash
+curl -X DELETE http://localhost:8000/api/kb/documents/{doc_id}
+```
+
+#### Get always-inject guardrails
+
+```bash
+curl http://localhost:8000/api/kb/guardrails
+```
+
+### Document Categories
+
+| Category | Purpose | Retrieval |
+|----------|---------|-----------|
+| `sop` | Standard operating procedures | Semantic search per instruction |
+| `guardrail` | Hard constraints and limits | Always injected (if `always_inject=true`) + semantic |
+| `domain` | Reference data (templates, teams) | Semantic search per instruction |
+| `faq` | Common questions and answers | Semantic search per instruction |
+
+### Sample KB Content
+
+Pre-built SOPs are in `data/kb/`:
+
+```
+data/kb/
+├── guardrails/
+│   └── limits.md          # Batch limits, data protection, rate limits
+├── sops/
+│   ├── batch-messaging.md # 5-step batch send procedure
+│   ├── vip-handling.md    # VIP contact management
+│   └── contact-management.md  # Search, tag, update procedures
+└── domain/
+    ├── template-catalog.md    # Template names, params, usage guide
+    └── team-structure.md      # Teams, assignment rules, escalation
+```
+
+## Skills Management
+
+Skills are named bundles of **tools + instructions**. They control what the agent can do and how it behaves.
+
+### Viewing Skills
+
+```bash
+curl http://localhost:8000/api/skills
+# → 5 builtin skills: contacts (8 tools), messaging (2), templates (2), operators (2), tickets (2)
+```
+
+### Disable/Enable a Skill
+
+```bash
+# Disable tickets — agent can no longer create/resolve tickets
+curl -X PATCH http://localhost:8000/api/skills/tickets \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+
+# Check active tools (should be 14 instead of 16)
+curl http://localhost:8000/api/skills/active/tools
+
+# Re-enable
+curl -X PATCH http://localhost:8000/api/skills/tickets \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+```
+
+### Create a Custom Skill
+
+```bash
+curl -X POST http://localhost:8000/api/skills \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "marketing",
+    "description": "Marketing campaign tools and guidelines",
+    "tool_names": ["send_template_message_batch", "list_templates"],
+    "instructions": "When sending marketing templates:\n- Check opt-in status first\n- Never send outside business hours (9-18)"
+  }'
+```
+
+### Update Skill Instructions
+
+```bash
+curl -X PATCH http://localhost:8000/api/skills/messaging \
+  -H "Content-Type: application/json" \
+  -d '{"instructions": "Always confirm before sending to more than 50 contacts."}'
+```
+
+### Built-in Skills
+
+| Skill | Tools | Description |
+|-------|-------|-------------|
+| `contacts` | 8 | Contact search, tagging, attribute management |
+| `messaging` | 2 | Send session messages and template broadcasts |
+| `templates` | 2 | Browse and inspect message templates |
+| `operators` | 2 | Assign conversations to operators/teams |
+| `tickets` | 2 | Create and resolve support tickets |
+
 ## How It Works — ReAct Loop
 
-The agent uses a **think → act → observe** loop. Unlike plan-then-execute approaches, the LLM sees each tool result before deciding the next action:
+The agent uses a **think → act → observe** loop:
 
 ```
 User: "Find all VIP contacts and send them the welcome_wati template"
@@ -54,46 +230,23 @@ User: "Find all VIP contacts and send them the welcome_wati template"
                 Respond: "Found 10 VIP contacts and sent welcome_wati to all of them."
 ```
 
-**Dynamic adaptation** — if a search returns 0 results, the agent tells you instead of blindly proceeding:
-
-```
-User: "Send welcome_wati to all premium contacts"
-
-  Iteration 1 — Act: search_contacts(tag="premium")
-                Observe: {contacts: [], total: 0}
-
-  Iteration 2 — Think: No premium contacts found, inform user
-                Respond: "No premium contacts found. Would you like to search by a different tag?"
-```
-
 ## Usage
 
 ### Interactive Mode (Recommended)
 
 ```bash
-docker compose exec wati-conductor python3 main.py
-
-╭──────────────────────────────────────────────────────────────────╮
-│ WATI Conductor - Interactive Mode                                │
-│ Type your instructions naturally. Type 'quit' or 'exit' to stop. │
-│ Type 'trust' to toggle auto-approval mode.                       │
-╰──────────────────────────────────────────────────────────────────╯
+python -m conductor.cli
 
 You: trust
 Trust mode enabled ✓
 
 You: What templates do I have?
-💬 Response:
-You have 6 message templates available...
-(1 iteration)
+💬 Response: You have 6 message templates available...
 
 You: Find all VIP contacts and send them the welcome_wati template
-💬 Response:
-Found 10 VIP contacts and sent welcome_wati to all of them.
-(3 iterations)
+💬 Response: Found 10 VIP contacts and sent welcome_wati to all of them.
 
 You: quit
-Goodbye! 👋
 ```
 
 ### Single-Shot Mode
@@ -102,7 +255,6 @@ Goodbye! 👋
 python -m conductor.cli "Find all VIP contacts"
 python -m conductor.cli "Send welcome_wati to VIPs" --dry-run
 python -m conductor.cli "Send welcome_wati to VIPs" --trust
-python -m conductor.cli "Escalate 628123450000 to Support" --verbose
 ```
 
 | Flag | Description |
@@ -111,76 +263,60 @@ python -m conductor.cli "Escalate 628123450000 to Support" --verbose
 | `--trust` | Auto-approve all tool executions |
 | `--verbose` | Enable debug logging |
 
-### Human-in-the-Loop
-
-By default, the agent asks for confirmation before each tool:
-
-```
-🔧 Tool: send_template_message_batch
-   Args: {'contacts': [...], 'template_name': 'welcome_wati'}
-   Execute? [Y/n/q]: Y
-```
-
-If you reject, the LLM observes the rejection and responds accordingly. Toggle trust mode with `trust` in the REPL or `--trust` flag.
-
 ## Configuration
 
 All settings in `.env`:
 
 ```bash
-# LLM — pick one (DeepSeek v4 Pro recommended for ReAct reasoning)
+# LLM (DeepSeek v4 Pro recommended for ReAct reasoning)
 LLM_REACT_MODEL=deepseek-v4-pro
 DEEPSEEK_API_KEY=sk-your-key
 
-# Or use Claude / OpenAI
-# LLM_REACT_MODEL=claude-3-5-sonnet-20241022
-# ANTHROPIC_API_KEY=sk-ant-your-key
-# LLM_REACT_MODEL=gpt-4o
-# OPENAI_API_KEY=sk-your-key
+# PostgreSQL (for KB + Skills)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=conductor
+POSTGRES_PASSWORD=conductor
+POSTGRES_DB=wati_conductor
 
-# ReAct safety limit (default: 10 iterations per instruction)
-MAX_REACT_ITERATIONS=10
+# Knowledge Base
+KB_ENABLED=true
+KB_EMBEDDING_MODEL=all-MiniLM-L6-v2
+KB_TOP_K=5
 
 # WATI API (mock mode works without credentials)
 USE_MOCK=true
-# USE_MOCK=false
-# WATI_API_ENDPOINT=https://live-server-123.wati.io
-# WATI_TOKEN=your_token
 ```
-
-## Available Tools (16)
-
-| Category | Tools |
-|----------|-------|
-| **Contacts** (8) | `search_contacts`, `get_contact_info`, `add_contact_tag`, `add_contact_tag_batch`, `remove_contact_tag`, `remove_contact_tag_batch`, `update_contact_attributes`, `update_contact_attributes_batch` |
-| **Messages** (2) | `send_session_message`, `send_template_message_batch` |
-| **Templates** (2) | `list_templates`, `get_template_details` |
-| **Operators** (2) | `assign_operator`, `assign_team` |
-| **Tickets** (2) | `create_ticket`, `resolve_ticket` |
 
 ## Architecture
 
-```
-agent_node ──(tool call)──► tool_node ──► agent_node  (loop)
-    │
-    └──(text response)──► END
-```
+```mermaid
+graph LR
+    subgraph API["🌐 FastAPI :8000"]
+        KB["/api/kb/*"]
+        SK["/api/skills/*"]
+    end
 
-Two-node LangGraph ReAct loop:
+    subgraph DB["🗄️ PostgreSQL + pgvector"]
+        DOCS[("kb_documents")]
+        CHUNKS[("kb_chunks<br/>Vector 384")]
+        SKILLS_T[("skills")]
+    end
 
-- **agent_node** — LLM reasons about current state, selects one tool or responds with text
-- **tool_node** — Executes the tool (with optional user confirmation), returns result
+    subgraph AGENT["🤖 ReAct Agent"]
+        CB["ContextBuilder"]
+        AN["agent_node"]
+        TN["tool_node"]
+    end
 
-The LLM uses native tool calling via `bind_tools` — no JSON parsing or structured output extraction.
+    API --> DB
+    CB -->|"retrieve"| DB
+    CB -->|"enriched prompt"| AN
+    AN <-->|"loop"| TN
 
-### State
-
-```python
-class AgentState(TypedDict, total=False):
-    messages: Annotated[list[AnyMessage], add_messages]  # All conversation messages
-    iteration_count: int       # Think-act-observe cycles
-    trust_mode: bool           # Skip confirmations
-    mode: Literal["execute", "dry-run"]
+    style API fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style DB fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style AGENT fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 ## Project Structure
@@ -188,58 +324,40 @@ class AgentState(TypedDict, total=False):
 ```
 wati-conductor/
 ├── conductor/
-│   ├── agent/
-│   │   ├── react_graph.py     # ReAct LangGraph loop
-│   │   ├── react_nodes.py     # agent_node + tool_node
-│   │   ├── llm_factory.py     # LLM provider routing + bind_tools
-│   │   ├── parser.py          # (legacy) structured output parser
-│   │   └── planner.py         # (legacy) rule-based planner
-│   ├── models/
-│   │   ├── state.py           # AgentState (message-based)
-│   │   └── wati.py            # Contact, Template, Message models
-│   ├── tools/                 # 16 LangChain @tool functions
-│   ├── clients/               # Mock + Real WATI API clients
-│   ├── cli.py                 # Click CLI (REPL + single-shot)
-│   ├── config.py              # Pydantic settings from .env
-│   └── history.py             # Conversation persistence (JSON)
-├── docs/                      # Full documentation (mkdocs)
+│   ├── agent/              # ReAct LangGraph loop
+│   ├── api/                # FastAPI service (KB + Skills endpoints)
+│   ├── db/                 # SQLAlchemy models + async session pool
+│   ├── kb/                 # Ingestion, embedding, retrieval
+│   ├── skills/             # Registry, builtin definitions
+│   ├── tools/              # 16 LangChain @tool functions
+│   ├── clients/            # Mock + Real WATI API clients
+│   ├── models/             # Pydantic models (state, intent, wati)
+│   ├── cli.py              # Click CLI (REPL + single-shot)
+│   └── config.py           # Settings from .env
+├── data/kb/                # Sample SOPs, guardrails, domain docs
+├── docs/                   # Full documentation (mkdocs)
 ├── tests/
-├── mock_data/                 # 50 contacts, 6 templates
-├── Dockerfile
-├── docker-compose.yaml
+├── mock_data/              # 50 contacts, 6 templates
+├── docker-compose.yaml     # PostgreSQL + pgvector + conductor
 └── pyproject.toml
 ```
-
-## Documentation
-
-Full docs available via mkdocs:
-
-```bash
-cd mkdocs && docker compose -f docker-compose.docs.yml up -d
-# Open http://localhost:9104
-```
-
-| Doc | Content |
-|-----|---------|
-| [Architecture](docs/architecture.md) | ReAct loop diagrams, state schema, data flow |
-| [Components](docs/components.md) | Module breakdown — agent, tools, clients, models |
-| [Status](docs/status.md) | What's implemented, what's planned |
-| [Roadmap](docs/roadmap.md) | V4 vision, RAG knowledge base plan |
-| [Setup](docs/setup.md) | Detailed configuration and troubleshooting |
-| [Dev Notes](docs/dev-notes.md) | Build notes and design trade-offs |
 
 ## Development
 
 ```bash
 poetry install
 
+# Start PostgreSQL
+docker compose up -d postgres
+
+# Run API server
+poetry run uvicorn conductor.api.main:app --reload --port 8000
+
 # Run tests
 pytest tests/ -v
 
 # Code quality
 black conductor/ tests/
-isort conductor/ tests/
-mypy conductor/
 ruff check conductor/
 ```
 
@@ -250,10 +368,10 @@ ruff check conductor/
 - [x] Mock WATI client (50 contacts, 6 templates)
 - [x] Rich CLI with dry-run, trust mode
 - [x] Docker deployment
-- [x] Multi-turn conversations with history
-- [x] Dynamic replanning and error reasoning
+- [x] **Knowledge Base** — PostgreSQL + pgvector, semantic search, SOPs/guardrails
+- [x] **Skills Management** — enable/disable tool groups, custom skills
+- [ ] Agent integration — ContextBuilder wiring KB into ReAct system prompt
 - [ ] Streaming responses
-- [ ] RAG knowledge base (SOPs + guardrails)
 - [ ] Real WATI API integration testing
 - [ ] Web UI (chat interface)
 - [ ] LangSmith tracing

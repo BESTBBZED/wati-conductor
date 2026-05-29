@@ -1,9 +1,12 @@
 services:
   wati-conductor:
     build: .
-    image: wati-conductor:v1
+    # image: wati-conductor:v1
     container_name: wati-conductor
     user: "${UID:-1000}:${GID:-1000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       # LLM Configuration
       - LLM_PARSE_MODEL=${LLM_PARSE_MODEL:-deepseek-chat}
@@ -15,6 +18,13 @@ services:
       - USE_MOCK=${USE_MOCK:-true}
       - WATI_API_ENDPOINT=${WATI_API_ENDPOINT:-}
       - WATI_TOKEN=${WATI_TOKEN:-}
+
+      # PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-conductor}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-conductor}
+      - POSTGRES_DB=${POSTGRES_DB:-wati_conductor}
 
       # Ticket Management
       - TICKET_REPORTER=${TICKET_REPORTER:-Zachary}
@@ -29,3 +39,23 @@ services:
     stdin_open: true
     tty: true
     command: tail -f /dev/null  # Keep container running
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: wati-conductor-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wati_conductor}
+      POSTGRES_USER: ${POSTGRES_USER:-conductor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-conductor}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor -d wati_conductor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -36,13 +36,39 @@ class Settings(BaseSettings):
     max_requests_per_second: int = 10
     max_concurrent_requests: int = 5
 
+    # PostgreSQL
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "conductor"
+    postgres_password: str = "conductor"
+    postgres_db: str = "wati_conductor"
+
+    # Knowledge Base
+    kb_enabled: bool = True
+    kb_embedding_model: str = "all-MiniLM-L6-v2"
+    kb_embedding_dim: int = 384
+    kb_top_k: int = 5
+    kb_chunk_size: int = 512
+    kb_chunk_overlap: int = 64
+
+    # Skills
+    skills_enabled: bool = True
+
     # Logging
     log_level: str = "INFO"
+
+    @property
+    def database_url(self) -> str:
+        """Build async PostgreSQL connection URL."""
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-        extra = "ignore"  # Ignore extra fields in .env
+        extra = "ignore"
 
 
 settings = Settings()

@@ -2,13 +2,14 @@
 
 import logging
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from conductor.config import settings
 from conductor.history import get_recent_context
 from conductor.models.state import AgentState
 from conductor.tools.registry import get_all_tools, get_tool
 from conductor.agent.llm_factory import get_react_llm
+from conductor.agent.context_builder import build_enriched_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,20 @@ Guidelines:
 - Be concise but complete in your final response."""
 
 
-def _build_system_message() -> SystemMessage:
-    """Build the system message, optionally including recent conversation context."""
-    parts = [SYSTEM_PROMPT]
+async def _build_system_message(user_instruction: str = "") -> SystemMessage:
+    """Build the system message with KB enrichment and conversation context.
+
+    Args:
+        user_instruction: The user's instruction for semantic KB retrieval.
+
+    Returns:
+        SystemMessage with enriched prompt content.
+    """
+    prompt = await build_enriched_prompt(SYSTEM_PROMPT, user_instruction)
     context = get_recent_context(max_turns=2)
     if context:
-        parts.append(f"\n{context}")
-    return SystemMessage(content="\n".join(parts))
+        prompt = f"{prompt}\n{context}"
+    return SystemMessage(content=prompt)
 
 
 def _get_bound_llm():
@@ -62,10 +70,17 @@ async def agent_node(state: AgentState) -> dict:
             ],
         }
 
-    # Ensure system message is first
+    # Ensure system message is first (only build enriched prompt on first iteration)
     messages = list(state.get("messages", []))
     if not messages or not isinstance(messages[0], SystemMessage):
-        messages.insert(0, _build_system_message())
+        # Extract user instruction from first HumanMessage for KB retrieval
+        user_instruction = ""
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                user_instruction = msg.content
+                break
+        system_msg = await _build_system_message(user_instruction)
+        messages.insert(0, system_msg)
 
     llm = _get_bound_llm()
     response = await llm.ainvoke(messages)
